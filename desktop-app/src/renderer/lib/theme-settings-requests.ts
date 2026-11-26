@@ -15,7 +15,7 @@ import { validateAppearanceCode } from './appearance-validation';
 import type { LocalAppearanceSnapshot } from '../../main/local-appearance';
 
 type Context = { client: QueryClient; base: string; userId: number | undefined; current: () => boolean; t: SettingsTranslate;
-  locale: () => string; reauthenticate: () => void; legacyAppearance?: () => unknown;chatCreated?:(id:number)=>void };
+  locale: () => string; reauthenticate: () => void; legacyAppearance?: () => unknown;chatCreated?:(id:number,open?:boolean)=>void };
 type RequestAdapter = Pick<ThemeSettingsSectionAdapter, 'requests' | 'request'>;
 export function createThemeSettingsRequests(context: Context): Record<string, RequestAdapter> {
   const { client, base, userId, current, t } = context;

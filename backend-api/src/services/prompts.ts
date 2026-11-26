@@ -194,6 +194,14 @@ export const createUserPrompt = (userId: number, name: string, description: stri
     VALUES (?, ?, ?, ?)
   `).run(userId, name, description, content);
 
+/** Keep native auto-selection as the default; generators may create without changing the account. */
+export const createUserPromptWithSelection = (userId: number, name: string, description: string, content: string, select = true) => db.transaction(() => {
+  const rowId = Number(createUserPrompt(userId, name, description, content).lastInsertRowid);
+  const promptId = toUserPromptSelectedId(rowId);
+  if (select) db.prepare('UPDATE users SET selected_prompt_id = ? WHERE id = ?').run(promptId, userId);
+  return promptId;
+})();
+
 export const updateUserPrompt = (userId: number, rowId: number, fields: { name?: string; description?: string; content?: string }) => {
   const sets: string[] = [];
   const params: (string | number)[] = [];

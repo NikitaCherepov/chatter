@@ -216,8 +216,9 @@ contextBridge.exposeInMainWorld('chatter', {
   },
   requestSettings: (sectionId: string, operation: string, params: Record<string, unknown> = {}) => {
     const editor = state?.settings?.editors?.[sectionId]??state?.settings?.editor, descriptor = editor?.requests?.find(item => item.id === operation);
+    const createsUnselectedPrompt = sectionId === 'prompt' && operation === 'createPrompt' && params?.select === false;
     if (!editor || editor.sectionId !== sectionId || editor.loading || editor.busy || !descriptor || documentRequests.size >= 4
-        || descriptor.requiresGesture && !navigator.userActivation.isActive || descriptor.requiresConfirmation && params?.confirmed !== true)
+        || descriptor.requiresGesture && !createsUnselectedPrompt && !navigator.userActivation.isActive || descriptor.requiresConfirmation && params?.confirmed !== true)
       return Promise.reject(new Error('settings_request_unavailable'));
     let parameters: Record<string, unknown>;
     try { if (!params || typeof params !== 'object' || Array.isArray(params)) throw new Error();

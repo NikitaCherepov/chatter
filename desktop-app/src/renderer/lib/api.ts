@@ -744,10 +744,15 @@ export async function searchCurrentChatMessages(
   return apiFetch(`/api/v1/chats/${chatId}/messages/search?q=${encodeURIComponent(query)}&limit=${limit}`);
 }
 
-export async function createChat(title?: string): Promise<{ chat_id: number; chat?: ChatInfo }> {
+export type CreateChatOptions = {title?:string;promptId?:number|null;personaId?:number|null;activate?:boolean;firstMessage?:{
+  content?:string;images?:({promptId:number}|{personaId:number}|{url:string})[]}|null};
+const chatCreationBody = (options:CreateChatOptions) => ({title:options.title,prompt_id:options.promptId,persona_id:options.personaId,activate:options.activate,
+  first_message:options.firstMessage===null?null:options.firstMessage===undefined?undefined:{content:options.firstMessage.content,
+    images:options.firstMessage.images?.map(image=>'promptId' in image?{prompt_id:image.promptId}:'personaId' in image?{persona_id:image.personaId}:{url:image.url})}});
+export async function createChat(title?: string | CreateChatOptions): Promise<{ chat_id: number; message_id?:number|null; chat?: ChatInfo }> {
   return apiFetch('/api/v1/chats', {
     method: 'POST',
-    body: JSON.stringify({ title }),
+    body: JSON.stringify(chatCreationBody(typeof title==='object'?title:{title})),
   });
 }
 
@@ -2135,8 +2140,8 @@ export async function importCharacterCard(file: CharacterCardFile): Promise<{ ok
   return apiFetch('/api/v1/prompts/import/character-card', { method: 'POST', body: JSON.stringify(file) });
 }
 
-export async function startCharacterCardChat(promptId: number): Promise<{ chat_id: number; message_id: number | null; chat?: ChatInfo }> {
-  return apiFetch(`/api/v1/prompts/${promptId}/start-chat`, { method: 'POST' });
+export async function startCharacterCardChat(promptId: number,options:Omit<CreateChatOptions,'promptId'>={}): Promise<{ chat_id: number; message_id: number | null; chat?: ChatInfo }> {
+  return apiFetch(`/api/v1/prompts/${promptId}/start-chat`, { method: 'POST',body:JSON.stringify(chatCreationBody(options)) });
 }
 
 export type PromptsResponse = {
@@ -2162,6 +2167,7 @@ export async function selectPrompt(promptId: number): Promise<{ ok: boolean }> {
 /** Create a new custom prompt. Auto-selects it server-side. */
 export async function createCustomPrompt(data: {
   name: string;
+  select?: boolean;
   description?: string;
   content: string;
 }): Promise<{ ok: boolean; prompt_id: number }> {

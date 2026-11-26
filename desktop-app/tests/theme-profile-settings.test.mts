@@ -81,6 +81,7 @@ const api: any = {
     calls.push(['startPromptChat', id]);
     return { chat_id: 55, message_id: 77, chat: { private: 'hidden' } };
   },
+  createChat: async (options:any)=>{calls.push(['createChat',options]);return {chat_id:56,message_id:78,chat:{private:'hidden'}};},
   apiFetch: async (path: string, options: any = {}) => {
     calls.push([path, options]);
     readSignal = options.signal;
@@ -120,7 +121,7 @@ const api: any = {
     calls.push(['createPrompt', input]);
     const id = -1002;
     library.custom_prompts.push({ ...input, id, image_url: null });
-    library.selected_prompt_id = id;
+    if(input.select!==false)library.selected_prompt_id = id;
     return { prompt_id: id };
   },
   updateCustomPromptById: async (id: number, input: any) => {
@@ -388,10 +389,12 @@ assert.equal(
 assert.deepEqual(library, original, 'generation never saves or selects');
 assert.equal(calls.at(-1)[1].current_content, 'Original');
 assert.equal(calls.at(-1)[1].preferred_model, 'model');
-await assert.rejects(
-  request('prompt', 'startPromptChat', { id: -1001 }),
-  /settings_entity_unavailable/,
-);
+const ordinaryStarted=await request('prompt','startPromptChat',{id:-1001,firstMessage:null});
+assert.equal(ordinaryStarted.chatId,55,'ordinary prompts can start chats without character-card metadata');
+const background=await request('prompt','createChat',{promptId:-1001,personaId:2,open:false,firstMessage:{content:'Hello',images:[{promptId:-1001}]},private:'ignored'});
+assert.equal(background.chatId,56);assert.equal(background.chat,undefined);
+const creation=calls.findLast((call:any)=>call[0]==='createChat')[1];assert.equal(creation.activate,false);assert.equal(creation.promptId,-1001);assert.equal(creation.private,undefined);
+assert.equal((await request('prompt','getPrompt',{id:-1001})).prompt.content,library.custom_prompts[0].content);
 library.custom_prompts[0].character_card = { first_message_present: true };
 await request('prompt', 'listPrompts');
 const started = await request('prompt', 'startPromptChat', { id: -1001 });
@@ -452,11 +455,14 @@ assert.equal(
 );
 await request('prompt', 'deletePrompt', { id: -1002, confirmed: true });
 assert.equal(library.selected_prompt_id, 1);
+const detached=await request('prompt','createPrompt',{name:'Detached',content:'Text',select:false});
+assert.equal(detached.selected_prompt_id,1);assert.equal(calls.findLast((call:any)=>call[0]==='createPrompt')[1].select,false);
 await request('prompt', 'selectPrompt', { id: -1 });
 assert.equal(library.selected_prompt_id, -1, 'legacy prompt remains selectable');
 assert.ok(invalidations.some((k) => k[0] === 'settings' && k[3] === 'prompts'));
 assert.ok(invalidations.some((k) => k[0] === 'chat-prompt'));
 await open('personas');
+assert.equal((await request('personas','getPersona',{id:1})).persona.name,personas[0].name);
 result = await request('personas', 'listPersonas');
 assert.equal(result.personas[0].user_id, undefined);
 assert.equal(result.personas[0].active, true);

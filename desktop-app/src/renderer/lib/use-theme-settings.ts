@@ -12,7 +12,7 @@ import { createThemeSettingsSections } from './theme-settings-sections';
 import { createThemeSettingsRequests } from './theme-settings-requests';
 import type { ThemeSettingsSectionAdapter } from './theme-settings-controller';
 
-export function useThemeSettings(themeId: string | null, onAuthInvalidated?: () => void, onChatCreated?:(id:number)=>void) {
+export function useThemeSettings(themeId: string | null, onAuthInvalidated?: () => void, onChatCreated?:(id:number,open?:boolean)=>void) {
   const { user, setUser, logout } = useAuth();
   const queryClient = useQueryClient();
   const { t, i18n } = useTranslation();
@@ -36,7 +36,7 @@ export function useThemeSettings(themeId: string | null, onAuthInvalidated?: () 
     };
     const requests = createThemeSettingsRequests({ client: queryClient, base, userId, current, t: (key, options) => String(live.current.t(key, options)),
       locale: () => live.current.locale, legacyAppearance: () => live.current.legacyAppearance,
-      chatCreated:id=>{if(current())live.current.chatCreated?.(id);},
+      chatCreated:(id,open)=>{if(current())live.current.chatCreated?.(id,open);},
       reauthenticate: () => { if (live.current.base === base && live.current.userId === userId) live.current.reauthenticate?.(); } });
     const withRequests = (sections: Record<string, ThemeSettingsSectionAdapter>) => Object.fromEntries(Object.entries(sections).map(([id, section]) =>
       [id, requests[id] ? { ...section, ...requests[id] } : section]));

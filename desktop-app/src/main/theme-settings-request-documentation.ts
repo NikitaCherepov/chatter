@@ -4,6 +4,9 @@ export type SettingsBuiltinPrompt={id:number;name:string;description:string;is_d
 export type SettingsCustomPrompt={id:number;name:string;description:string;content:string;image_url:string|null;character_card?:{first_message_present:boolean}|null};
 export type SettingsPromptLibrary={prompts:SettingsBuiltinPrompt[];custom_prompts:SettingsCustomPrompt[];selected_prompt_id:number|null;custom_prompt_content:string|null;max_custom_prompt_length?:number};
 export type SettingsPromptInput={name:string;description?:string;content:string};
+export type SettingsChatImage={promptId:number}|{personaId:number}|{url:string};
+export type SettingsChatCreation={title?:string;promptId?:number|null;personaId?:number|null;open?:boolean;firstMessage?:{content?:string;images?:SettingsChatImage[]}|null};
+export type SettingsCreatedChat={chatId:number;messageId:number|null};
 export type SettingsPersona={id:number;name:string;description:string;coreMemory:string;userInstructions:string;imageUrl:string|null;allowCoreMemoryUpdate:boolean;primary:boolean;active:boolean};
 export type SettingsPersonaInput={name:string;description:string;coreMemory:string;userInstructions?:string;allowCoreMemoryUpdate:boolean};
 export type SettingsPersonaLibrary={personas:SettingsPersona[]};
@@ -35,10 +38,12 @@ export type SettingsRequestContract={
   serializePromptSections:{params:{sections:SettingsPromptSections};result:{content:string}};
   chooseProfileImage:{params:{};result:SettingsProfileImage|null};
   cropProfileImage:{params:SettingsProfileImage&{crop:SettingsProfileCrop;outputSize?:number};result:SettingsCroppedProfileImage};
-  startPromptChat:{params:{id:number};result:{chatId:number;messageId:number|null}};
+  startPromptChat:{params:Omit<SettingsChatCreation,'promptId'>&{id:number};result:SettingsCreatedChat};
+  createChat:{params:SettingsChatCreation;result:SettingsCreatedChat};
+  getPrompt:{params:{id:number};result:{prompt:SettingsCustomPrompt}};
   listPrompts:{params:{};result:SettingsPromptLibrary};
   selectPrompt:{params:{id:number};result:SettingsPromptLibrary};
-  createPrompt:{params:SettingsPromptInput;result:SettingsPromptLibrary&{createdId:number}};
+  createPrompt:{params:SettingsPromptInput&{select?:boolean};result:SettingsPromptLibrary&{createdId:number}};
   updatePrompt:{params:SettingsPromptInput&{id:number};result:SettingsPromptLibrary};
   deletePrompt:{params:{id:number;confirmed:true};result:SettingsPromptLibrary};
   generatePrompt:{params:{instruction:string;currentContent?:string;detail?:'minimal'|'medium'|'detailed'|'none';modelId?:string};result:{generated_prompt:string}};
@@ -59,6 +64,7 @@ export type SettingsRequestContract={
   applyPersonaSurvey:{params:{id:number;surveyId:string;text:string};result:SettingsPersonaInstructions};
   deletePersonaSurvey:{params:{id:number;surveyId:string;removeApplied:boolean;confirmed:true};result:SettingsPersonaInstructions};
   listPersonas:{params:{};result:SettingsPersonaLibrary};
+  getPersona:{params:{id:number};result:{persona:SettingsPersona}};
   createPersona:{params:SettingsPersonaInput;result:SettingsPersonaLibrary&{createdId:number}};
   updatePersona:{params:SettingsPersonaInput&{id:number};result:SettingsPersonaLibrary};
   activatePersona:{params:{id:number};result:SettingsPersonaLibrary};

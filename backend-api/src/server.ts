@@ -127,7 +127,9 @@ import { assignUserPlan, ensureUserMonthlyUsageWindow, getUserQuotaPeriod, type 
 import { runMigrations } from './services/migrations.js';
 import { resolveImageFile, getUploadsDir } from './services/image-storage.js';
 import { attachMediaAsset, deleteMediaAssetIfUnreferenced, detachImageUrlFromEntity, getMediaAssetByUrl, pruneExpiredMediaAssets, removeMediaReferencesForEntity, saveImageAsset } from './services/media-assets.js';
-import { importCharacterCard, listCharacterCardPromptSummaries, MAX_CHARACTER_CARD_BYTES, parseCharacterCard, startCharacterCardChat, toCharacterCardPreview } from './services/character-card-import.js';
+import { importCharacterCard, listCharacterCardPromptSummaries, MAX_CHARACTER_CARD_BYTES, parseCharacterCard, toCharacterCardPreview } from './services/character-card-import.js';
+import { createConfiguredChat, parseChatCreationOptions, startPromptChat } from './services/chat-creation.js';
+import { createUserPromptWithSelection } from './services/prompts.js';
 import { importSillyTavernPersonas, previewSillyTavernPersonas } from './services/persona-import.js';
 import { importSillyTavernChats, previewSillyTavernChats } from './services/sillytavern-chat-import.js';
 import { canUserReadRegisteredImage } from './services/media-access.js';
@@ -2243,11 +2245,18 @@ app.get('/api/v1/chats/:id/messages/search', (req: AuthedRequest, res) => {
   return res.json({ results: searchCurrentChatMessages(userId, chatId, query, limit) });
 });
 
-app.post('/api/v1/chats', (req: AuthedRequest, res) => {
+app.post('/api/v1/chats', async (req: AuthedRequest, res) => {
   const userId = accountIdFromRequest(req);
-  const title = `${req.body?.title || ''}`;
-  const chatId = createUserChat(userId, title);
-  res.status(201).json({ chat_id: chatId, chat: getUserChatListItem(userId, chatId) });
+  try {
+    const result = await createConfiguredChat(userId, parseChatCreationOptions(req.body ?? {}));
+    res.status(201).json({ chat_id: result.chatId, message_id: result.messageId, chat: getUserChatListItem(userId, result.chatId) });
+  } catch (error: any) {
+    const code = error?.message;
+    if (['prompt_not_found','persona_not_found','user_not_found'].includes(code)) return res.status(404).json({error:code});
+    if (['bad_chat_options','bad_first_message','chat_image_unavailable'].includes(code)) return res.status(400).json({error:code});
+    console.error('[chats/create]', formatSafeError(error));
+    return res.status(500).json({error:'chat_create_failed'});
+  }
 });
 
 const sendChatRoomError = (res: any, err: unknown) => {
@@ -4076,9 +4085,10 @@ app.post('/api/v1/prompts/import/character-card', async (req: AuthedRequest, res
 
 app.post('/api/v1/prompts/:promptId/start-chat', async (req: AuthedRequest, res) => {
   const selectedPromptId = Number(req.params.promptId);
-  if (!Number.isSafeInteger(selectedPromptId)) return res.status(400).json({ error: 'bad_prompt_id' });
+  if (!Number.isSafeInteger(selectedPromptId) || selectedPromptId===0) return res.status(400).json({ error: 'bad_prompt_id' });
   try {
-    const result = await startCharacterCardChat(req.authUserId!, selectedPromptId);
+    const { promptId: _ignored, ...options } = parseChatCreationOptions(req.body ?? {});
+    const result = await startPromptChat(req.authUserId!, selectedPromptId, options);
     return res.status(201).json({
       chat_id: result.chatId,
       message_id: result.messageId,
@@ -4086,7 +4096,8 @@ app.post('/api/v1/prompts/:promptId/start-chat', async (req: AuthedRequest, res)
     });
   } catch (error) {
     const code = formatSafeError(error);
-    if (code === 'character_card_not_found') return res.status(404).json({ error: code });
+    if (['character_card_not_found','prompt_not_found','persona_not_found'].includes(code)) return res.status(404).json({ error: code });
+    if (['bad_chat_options','bad_first_message','chat_image_unavailable'].includes(code)) return res.status(400).json({error:code});
     console.error('[prompts/character-card] start chat failed:', code);
     return res.status(500).json({ error: 'character_card_chat_failed' });
   }
@@ -4099,16 +4110,13 @@ app.post('/api/v1/prompts/custom', (req: AuthedRequest, res) => {
   const description = `${req.body?.description || ''}`.trim();
   const content = `${req.body?.content || ''}`;
   if (!name) return res.status(400).json({ error: 'name_required' });
+  if (req.body?.select !== undefined && typeof req.body.select !== 'boolean') return res.status(400).json({ error: 'bad_select' });
   const user = getUserById(userId);
   if (content.length > getMaxCustomPromptLength(user?.plan)) {
     return res.status(400).json({ error: 'content_too_long', limit: getMaxCustomPromptLength(user?.plan) });
   }
 
-  const result = createUserPrompt(userId, name, description, content);
-  const newRowId = Number(result.lastInsertRowid);
-  const selectedId = toUserPromptSelectedId(newRowId);
-  // Auto-select the newly created prompt
-  updateUserPrompt(userId, selectedId);
+  const selectedId = createUserPromptWithSelection(userId, name, description, content, req.body?.select !== false);
   return res.json({ ok: true, prompt_id: selectedId });
 });
 

@@ -16,6 +16,7 @@ const apiFile = fs.readFileSync(path.join(desktop, 'src/renderer/lib/api.ts'), '
 const credentialWriters = apiFile.slice(apiFile.indexOf('export function changeAccountPassword'), apiFile.indexOf('export async function setUserTimezone'));
 const promptWriters = apiFile.slice(apiFile.indexOf('export async function selectPrompt'), apiFile.indexOf('// ---------- Notes ----------'));
 const characterChatWriter = apiFile.slice(apiFile.indexOf('export async function startCharacterCardChat'),apiFile.indexOf('export type PromptsResponse'));
+const chatCreationWriter = apiFile.slice(apiFile.indexOf('export type CreateChatOptions'),apiFile.indexOf('export async function forkChatFromMessage'));
 const apiSource = `
 export const API_BASE='fixture';
 export const getUiSettings=async()=>{const user=window.testAccount;if(window.delaySettingsRead)await window.delaySettingsRead;return {settings:structuredClone(window.ui[user])};};
@@ -53,7 +54,8 @@ export const apiFetch=async(url,options={})=>{
  if(url==='/api/v1/prompts')return structuredClone(window.prompts);
  if(url==='/api/v1/prompts/select'){window.prompts.selected_prompt_id=payload.prompt_id;return {ok:true};}
  if(url==='/api/v1/prompts/generate')return {generated_prompt:'Generated proposal'};
- if(url==='/api/v1/prompts/custom'&&options.method==='POST'){const id=-1001;window.prompts.custom_prompts.push({...payload,id,image_url:null});window.prompts.selected_prompt_id=id;return {ok:true,prompt_id:id};}
+ if(url==='/api/v1/prompts/custom'&&options.method==='POST'){const id=-1001-window.prompts.custom_prompts.length;window.prompts.custom_prompts.push({...payload,id,image_url:null});if(payload.select!==false)window.prompts.selected_prompt_id=id;return {ok:true,prompt_id:id};}
+ if(url==='/api/v1/chats'&&options.method==='POST'){window.chatCreationInput=payload;return {chat_id:79,message_id:89};}
  if(url==='/api/v1/memory/personas'&&options.method==='POST'){const persona={...payload,id:2,image_url:null,is_primary:0,is_default:0,allow_core_memory_update:payload.allow_core_memory_update?1:0};window.personas.push(persona);return {persona};}
  if(url==='/api/v1/memory/personas'){window.personaReads=(window.personaReads||0)+1;return {personas:structuredClone(window.personas)};}
  if(url.startsWith('/api/v1/memory/personas/')&&options.method==='PATCH'){const persona=window.personas.find(p=>p.id===Number(url.split('/').at(-1)));Object.assign(persona,payload,{allow_core_memory_update:payload.allow_core_memory_update?1:0});return {persona:structuredClone(persona)};}
@@ -68,6 +70,7 @@ export const apiFetch=async(url,options={})=>{
 };export const localMcpScope=()=>'';export const syncLocalMcp=async()=>{};
 ${credentialWriters}
 ${promptWriters}
+${chatCreationWriter}
 ${characterChatWriter}
 export const setPersonaImage=async()=>{window.avatarUploads=(window.avatarUploads||0)+1;return {ok:true};};export const deletePersonaImage=async()=>({ok:true});export const resolveImageUrl=value=>value;
 export const getModels=async()=>({models:[{id:'smart',name:'Smart',reasoning_levels:['high']},{id:'simple',name:'Simple',reasoning_levels:[]}],preferred_model:'smart',auto_reasoning_levels:['high']});export const getModelSettings=async()=>({model_settings:{}});export const getSubagentModel=async()=>({subagent_model:window.agentModel});export const getSubagentReasoningLevel=async()=>({reasoning_level:window.agentReasoning});export const getLinkStatus=async()=>({});export const getPrompts=async()=>({prompts:[]});
@@ -295,8 +298,19 @@ app.whenReady().then(async()=>{
  await host.webContents.executeJavaScript('window.prompts.custom_prompts[0].character_card={first_message_present:true}');await resource('prompt','listPrompts');
  assert.equal((await resource('prompt','startPromptChat',{id:-1001},true)).messageId,88);await until(async()=>await host.webContents.executeJavaScript('window.createdChats.length')===1);assert.equal(await host.webContents.executeJavaScript('window.createdChats[0]'),77);
  await resource('prompt','selectPrompt',{id:1},true);assert.equal(await host.webContents.executeJavaScript('window.prompts.selected_prompt_id'),1);
+ await sleep(5500);assert.equal(await js('navigator.userActivation.isActive'),false);
+ await assert.rejects(()=>resource('prompt','createPrompt',{name:'Must require gesture',content:'Global'}),/settings_request_unavailable/);
+ const independent=await resource('prompt','createPrompt',{name:'Independent',content:'Own character',select:false});
+ assert.equal(independent.selected_prompt_id,1,'async unselected creation preserves global choice after gesture expires');
+ await resource('prompt','setPromptImage',{id:independent.createdId,base64:cropSource,mimeType:'image/png'});
+ assert.equal((await resource('prompt','getPrompt',{id:independent.createdId})).prompt.name,'Independent');
+ const personal=await resource('prompt','createChat',{promptId:independent.createdId,open:false,firstMessage:{content:'Hello',images:[{promptId:independent.createdId}]}});
+ assert.equal(personal.chatId,79);assert.equal(await host.webContents.executeJavaScript('window.chatCreationInput.prompt_id'),independent.createdId);
+ assert.equal(await host.webContents.executeJavaScript('window.chatCreationInput.activate'),false);
+ assert.equal(await host.webContents.executeJavaScript('window.chatCreationInput.first_message.images[0].prompt_id'),independent.createdId);
  await click('open-personas');await until(()=>settings.editor?.sectionId==='personas'&&!settings.editor.loading);
  assert.equal((await resource('personas','listPersonas')).personas[0].primary,true);
+ assert.equal((await resource('personas','getPersona',{id:1})).persona.id,1);
  const createdPersona=await resource('personas','createPersona',{name:'Fixture persona',description:'Description',coreMemory:'Memory',allowCoreMemoryUpdate:false},true);
  assert.equal(createdPersona.createdId,2);assert.equal(createdPersona.personas.find(item=>item.id===2).active,false);
  await resource('personas','activatePersona',{id:2},true);assert.equal(await host.webContents.executeJavaScript('window.personas.find(item=>item.id===2).is_default'),1);

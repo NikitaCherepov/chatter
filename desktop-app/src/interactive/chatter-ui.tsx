@@ -7,7 +7,7 @@ import componentStyles from './chatter-ui.scss?inline';
 import {useChatterState,getChatterSnapshot} from './chatter-state';
 import { useImage } from './chat-sdk';
 export {useChatterState} from './chatter-state';
-export {useSettingsSection,useSettingsApi,useSettingsTask,useSettingsResource,useSettingsAction,useSettingsForm,useSettingsQuery,usePersonaEditor,usePromptEditor,useIntuitionEditor,usePersonas,usePrompts,usePersonaInstructions,useProfileAvatar} from './settings-sdk';
+export {useSettingsSection,useSettingsApi,useSettingsTask,useSettingsResource,useSettingsAction,useSettingsForm,useSettingsQuery,usePersonaEditor,usePromptEditor,useIntuitionEditor,usePersonas,usePrompts,useChatCreation,usePersonaInstructions,useProfileAvatar} from './settings-sdk';
 export {useComposer,useVoice,useSpeech,useModels,useConversation,useMessage,useMessageEditor,useImage,useImageViewer,useDocument,useDocumentPage,useDocumentViewer,useConfirmations,useConfirmation,useChatLibrary,useChatMenu,useFolderMenu,useChatEditor,useFolderEditor} from './chat-sdk';
 export type {ChatMessage,ChatMessageAction,ChatReasoningLevel,ChatDocument,ChatDocumentPage,ChatResult,MessageActionInput} from './chat-sdk';
 export {useThemeEffects,useThemeAudio,assetSource} from './effects-sdk';

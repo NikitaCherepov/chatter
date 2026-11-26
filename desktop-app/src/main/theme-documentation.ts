@@ -8,6 +8,7 @@ import { THEME_CHAT_EXAMPLES } from './theme-chat-sdk-examples';
 import {THEME_EFFECTS_GUIDE} from './theme-effects-documentation';
 import {THEME_DND_GUIDE} from './theme-dnd-documentation';
 import {THEME_STORAGE_GUIDE} from './theme-storage-documentation';
+import {THEME_CHARACTER_CHATS_GUIDE} from './theme-character-chats-documentation';
 
 export const THEME_README = `# Local Chatter themes
 
@@ -29,7 +30,7 @@ Keep generation and maintenance small by reusing code as you write it:
 - Use the existing SDK for supported behavior before writing loading, draft, save or error-handling logic yourself. For React settings start with docs/settings-sdk.md.
 - When the same structure serves the same purpose in two places, extract one theme-owned component and import it. Repeated fields, cards, dialogs and groups such as a form hint with Save/Discard buttons should share their markup; pass differences as props or children. Visual similarity alone does not require an abstraction.
 - MUST centralize colors and font families/sizes as CSS variables in global.css (import once). Use var(...) in components, inline styles and SVG; literals only in token definitions. Reuse CSS base classes/modifiers. See docs/styling.md.
-- Split larger themes by responsibility: keep the entry focused on composition and import panels, editors and shared components from separate files. Small themes may stay small. No fixed folder structure is required.
+- Split larger themes by responsibility: the entry composes imported panels, editors and shared components. Small themes need no fixed structure.
 - Reuse preserves the theme's own markup, style and animations. Do not simplify its design or replace cards with tables just to reduce code size. Bundled UI components remain optional.
 
 ## Guides
@@ -48,6 +49,7 @@ Keep generation and maintenance small by reusing code as you write it:
 - docs/settings-operations.md: account security forms, memory spaces/records/map, quotas, agents and theme management.
 - docs/settings-intuition.md: intuition preferences, editable questions and generated suggestions.
 - docs/settings-profiles.md: prompt libraries, generation, personas and their avatars.
+- docs/character-chats.md: chat creation, prompt/persona binding and text/photo openings.
 - docs/settings-instructions.md: persona instructions and the complete questionnaire workflow.
 - docs/settings-profile-images.md: custom avatar pickers, previews and cropping without native modals.
 - docs/media.md: images, full-resolution viewers, documents and outgoing attachments.
@@ -92,6 +94,7 @@ rules for each screen. Your own layout and component markup remain unrestricted.
   'drag-and-drop.md':THEME_DND_GUIDE,
   'effects.md':THEME_EFFECTS_GUIDE,
   'storage.md':THEME_STORAGE_GUIDE,
+  'character-chats.md':THEME_CHARACTER_CHATS_GUIDE,
   'chat-sdk.md': CHAT_SDK_GUIDE,
   'settings-sdk.md': `# Settings SDK: behavior without markup
 
@@ -149,7 +152,8 @@ can finish on their original server after closing; a stale result never updates 
   discard, reload, run and submit. Uses the host's existing scalar draft, availability and validation.
   hasDraftChanges includes nested structured forms; canReload/reload protect them from an accidental
   whole-section reset. Refresh a resource with its own reload to preserve and reconcile its draft.
-- usePersonas / usePrompts: shared library data and activate/select/remove(id,confirmed:true).
+- usePersonas / usePrompts: shared library data, read/setImage and activate/select/remove(id,confirmed:true).
+- useChatCreation: create/startPrompt with per-chat prompt/persona, optional greeting/photos and background creation; see character-chats.md.
 - usePersonaEditor(id|null) / usePromptEditor(id|null): editable profile forms. createdId identifies
   a successfully created entry. Prompt creation selects it; persona creation does not. Prompt
   generate returns a separate proposal; useProposal copies it into the local draft only. Its
@@ -322,8 +326,9 @@ selected_prompt_id and max_custom_prompt_length when supplied by the server. IDs
 pass the returned id unchanged, including negative IDs. Built-ins are selectable, not editable.
 Legacy id -1 selects the old single custom_prompt_content; create a library entry to edit a copy.
 
-createPrompt({name,description?,content}) saves AND selects the new prompt, just like native
-settings. Tell the user this before the final submission. updatePrompt({id,name,description?,content})
+createPrompt({name,description?,content,select?}) saves and, by default, selects the new prompt,
+just like native settings. select:false saves without changing the global choice; use it for
+generators and per-chat workflows. Tell the user what submission does. updatePrompt({id,name,description?,content})
 edits a custom entry; selectPrompt selects an existing entry. Results refresh the library; creation
 also returns createdId. Use the returned plan-specific content limit and handle server errors.
 deletePrompt({id,confirmed:true}) requires your own final user confirmation. Existing server
@@ -339,9 +344,8 @@ parsePromptSections({content}) and serializePromptSections({sections}) use the n
 editor format: description/personality/scenario/examples/other with explicit top-level headings.
 Free-form text is retained in description. These local transformations never save/select a prompt;
 let the user edit a whole text or separate fields, then submit updatePrompt/createPrompt normally.
-For an existing custom entry with character_card metadata, startPromptChat({id}) starts its chat
-through the existing endpoint and opens it after the result is delivered. It returns chatId and
-messageId; the saved first message is included by the server. This does not import a Character Card.
+For chat creation with an ordinary/custom/imported prompt, optional persona, text/photo opening
+and background creation see character-chats.md. It also covers createPrompt({select:false}).
 
 ## Personas
 
@@ -364,14 +368,15 @@ return the refreshed library and update the same native cache/events; there is n
 Avatar source, picker, crop and upload functions are documented once in settings-profile-images.md.
 
 Read a library before addressing existing IDs. Only entries returned by this settings session's
-library reads are addressable. Before editing/deleting, the host rereads the target to detect outside changes;
+library reads are addressable for edits. getPrompt/getPersona perform their own read, and chat
+creation validates references on the server. Before editing/deleting, the host rereads the target to detect outside changes;
 settings_entity_changed means preserve the draft, explicitly reload and reconcile before retrying.
 This preflight is not an atomic server revision lock. Loading/busy/errors and late results must
 be handled by your form, just like other settings operations. Generation does not overwrite drafts.
 
 Imports remain outside these operations. editor.links points to the native data/import section;
 open it only at the user's request with openSettings(link.sectionId,link.target). Ordinary library,
-instruction, survey and image operations stay in the theme; startPromptChat intentionally navigates
+instruction, survey and image operations stay in the theme; startPromptChat normally navigates
 to the created chat. No other operation automatically opens or replaces the interface.
 `,
   'settings-intuition.md': `# Intuition settings

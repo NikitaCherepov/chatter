@@ -24,7 +24,9 @@ export const SETTINGS_REQUESTS: Record<string, Record<string, { key: string; mut
     parsePromptSections: {key:'settings.prompt.modeAdvanced'},
     serializePromptSections: {key:'settings.prompt.modeUsual'},
     cropProfileImage: {key:'settings.prompt.imageCropTitle',gesture:true},
-    startPromptChat: {key:'settings.prompt.characterCard.startChat',mutation:true},
+    startPromptChat: {key:'settings.prompt.characterCard.startChat',mutation:true,gesture:false},
+    createChat: {key:'chat.sidebar.newChat',mutation:true,gesture:false},
+    getPrompt: {key:'settings.sections.prompt'},
     listPrompts: {key:'settings.sections.prompt'},
     getPromptImageSource: {key:'chat.image.photoAlt'},
     selectPrompt: {key:'common.apply',mutation:true},
@@ -32,7 +34,7 @@ export const SETTINGS_REQUESTS: Record<string, Record<string, { key: string; mut
     updatePrompt: {key:'common.save',mutation:true},
     deletePrompt: {key:'common.delete',mutation:true,confirm:true},
     generatePrompt: {key:'settings.prompt.generate',gesture:true},
-    setPromptImage: {key:'settings.prompt.imageChoose',mutation:true},
+    setPromptImage: {key:'settings.prompt.imageChoose',mutation:true,gesture:false},
     deletePromptImage: {key:'common.delete',mutation:true},
   },
   personas: {
@@ -48,12 +50,13 @@ export const SETTINGS_REQUESTS: Record<string, Record<string, { key: string; mut
     applyPersonaSurvey: {key:'playerInstructions.apply',mutation:true},
     deletePersonaSurvey: {key:'common.delete',mutation:true,confirm:true},
     listPersonas: {key:'settings.sections.personas'},
+    getPersona: {key:'settings.sections.personas'},
     getPersonaImageSource: {key:'chat.image.photoAlt'},
     createPersona: {key:'settings.account.personas.createTitle',mutation:true},
     updatePersona: {key:'common.save',mutation:true},
     activatePersona: {key:'common.apply',mutation:true},
     deletePersona: {key:'common.delete',mutation:true,confirm:true},
-    setPersonaImage: {key:'settings.account.personas.image',mutation:true},
+    setPersonaImage: {key:'settings.account.personas.image',mutation:true,gesture:false},
     deletePersonaImage: {key:'common.delete',mutation:true},
   },
   limits: { getQuota: { key: 'quota.title' } },
@@ -70,7 +73,7 @@ export const SETTINGS_REQUESTS: Record<string, Record<string, { key: string; mut
 };
 export function settingsOperations(section: string, t: (key: string) => string): SettingsOperation[] {
   return Object.entries(SETTINGS_REQUESTS[section] ?? {}).map(([id, definition]) => ({ id, label: t(definition.key), mutation: definition.mutation === true,
-    requiresGesture: definition.mutation === true || definition.gesture === true, requiresConfirmation: definition.confirm === true }));
+    requiresGesture: definition.gesture ?? definition.mutation === true, requiresConfirmation: definition.confirm === true }));
 }
 const object = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === 'object' && !Array.isArray(value));
 const text = (value: unknown, max: number, blank = false) => typeof value === 'string' && value.length <= max && (blank || value.trim().length > 0);
@@ -79,6 +82,13 @@ const positive = (value: unknown) => typeof value === 'number' && Number.isSafeI
 const themeId = (value: unknown) => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(value);
 const profileImage = (p:Record<string,unknown>) => text(p.base64,14*1024*1024) && typeof p.mimeType==='string' && ['image/png','image/jpeg','image/webp','image/gif'].includes(p.mimeType);
 const modelId = (value:unknown) => value===undefined || text(value,200);
+const chatOptions = (p:Record<string,unknown>) => (p.title===undefined||text(p.title,2000,true))
+  && (p.promptId===undefined||p.promptId===null||typeof p.promptId==='number'&&Number.isSafeInteger(p.promptId)&&p.promptId!==0)
+  && (p.personaId===undefined||p.personaId===null||positive(p.personaId)) && (p.open===undefined||typeof p.open==='boolean')
+  && (p.firstMessage===undefined||p.firstMessage===null||object(p.firstMessage)
+    && (p.firstMessage.content===undefined||text(p.firstMessage.content,2*1024*1024,true))
+    && (p.firstMessage.images===undefined||Array.isArray(p.firstMessage.images)&&p.firstMessage.images.length<=8&&p.firstMessage.images.every(image=>object(image)&&Object.keys(image).length===1
+      && (typeof image.promptId==='number'&&Number.isSafeInteger(image.promptId)&&image.promptId!==0||positive(image.personaId)||typeof image.url==='string'&&/^\/(?:api\/v1\/images|uploads)\/[^/?#\\]+$/.test(image.url)))));
 export function validGlobalIntuitionSettings(value:unknown):boolean {
   if (!object(value) || !['enabled','disabled'].includes(String(value.mode))) return false;
   if (value.historyMessages!==null && !(Number.isInteger(value.historyMessages) && Number(value.historyMessages)>=0 && Number(value.historyMessages)<=50)) return false;
@@ -115,9 +125,12 @@ export function parseSettingsRequest(value: unknown): ThemeSettingsRequest | nul
     && (op!=='answerPersonaSurvey'||object(p.answers)&&JSON.stringify(p.answers).length<=64000)
     && (op!=='followUpPersonaSurvey'||p.brief===undefined||text(p.brief,2000,true))
     && (op!=='applyPersonaSurvey'||text(p.text,12000,true))&&(op!=='deletePersonaSurvey'||typeof p.removeApplied==='boolean');
-  else if (op==='createPrompt'||op==='updatePrompt') valid=(op==='createPrompt'||customPromptId) && text(p.name,2*1024*1024) && text(p.content,2*1024*1024,true) && (p.description===undefined||text(p.description,2*1024*1024,true));
+  else if (op==='createPrompt'||op==='updatePrompt') valid=(op==='createPrompt'||customPromptId) && text(p.name,2*1024*1024) && text(p.content,2*1024*1024,true) && (p.description===undefined||text(p.description,2*1024*1024,true)) && (p.select===undefined||typeof p.select==='boolean');
   else if (op==='selectPrompt') valid=promptId;
-  else if (op==='deletePrompt'||op==='getPromptImageSource'||op==='startPromptChat') valid=customPromptId;
+  else if (op==='startPromptChat') valid=promptId&&chatOptions(p);
+  else if (op==='createChat') valid=chatOptions(p);
+  else if (op==='deletePrompt'||op==='getPromptImageSource'||op==='getPrompt') valid=customPromptId;
+  else if (op==='getPersona') valid=positive(p.id);
   else if (op==='generatePrompt') valid=text(p.instruction,2*1024*1024) && (p.currentContent===undefined||text(p.currentContent,2*1024*1024,true)) && (p.detail===undefined||['minimal','medium','detailed','none'].includes(String(p.detail)))&&modelId(p.modelId);
   else if(op==='createPersona'||op==='updatePersona') valid=(op==='createPersona'||positive(p.id)) && text(p.name,80) && text(p.description,240,true)
     && text(p.coreMemory,2*1024*1024,true) && typeof p.allowCoreMemoryUpdate==='boolean' && (p.userInstructions===undefined||text(p.userInstructions,12000,true));

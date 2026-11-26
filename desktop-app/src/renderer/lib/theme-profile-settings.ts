@@ -29,7 +29,7 @@ type Context = {
   userId: number | undefined;
   current: () => boolean;
   t: SettingsTranslate;
-  chatCreated?: (id: number) => void;
+  chatCreated?: (id: number, open?: boolean) => void;
 };
 type Adapter = Pick<ThemeSettingsSectionAdapter, 'requests' | 'request'>;
 const publicPersona = (item: Persona) => ({
@@ -244,6 +244,19 @@ export function createThemeProfileRequests(context: Context): Record<string, Ada
           guard();
           return { result: { generated_prompt: result.generated_prompt } };
         }
+        if (operation === 'createChat' || operation === 'startPromptChat') {
+          const options: api.CreateChatOptions = {title:params.title as string|undefined,promptId:params.promptId as number|null|undefined,
+            personaId:params.personaId as number|null|undefined,firstMessage:params.firstMessage as api.CreateChatOptions['firstMessage'],activate:params.open!==false};
+          const result = operation === 'createChat' ? await api.createChat(options) : await api.startCharacterCardChat(Number(params.id), options);
+          guard();
+          return {result:{chatId:result.chat_id,messageId:result.message_id??null},afterReply:()=>{if(current())context.chatCreated?.(result.chat_id,params.open!==false);}};
+        }
+        if (operation === 'getPrompt') {
+          const data = await readPrompts(signal); guard(); prompts = data;
+          const prompt = publicPrompts(data).custom_prompts.find(item=>item.id===params.id);
+          if (!prompt) throw new Error('settings_entity_unavailable');
+          return {result:{prompt}};
+        }
         const id = Number(params.id);
         if (operation !== 'createPrompt') {
           if (!prompts) throw new Error('settings_read_required');
@@ -254,8 +267,6 @@ export function createThemeProfileRequests(context: Context): Record<string, Ada
           } else if (!known) throw new Error('settings_entity_unavailable');
           if (operation === 'getPromptImageSource')
             return { result: await imageSource(known!.image_url, guard, signal) };
-          if (operation === 'startPromptChat' && !known?.character_card)
-            throw new Error('settings_entity_unavailable');
           if (known && operation !== 'selectPrompt') {
             const fresh = await readPrompts(signal);
             guard();
@@ -267,16 +278,6 @@ export function createThemeProfileRequests(context: Context): Record<string, Ada
           }
         }
         let createdId: number | undefined;
-        if (operation === 'startPromptChat') {
-          const result = await api.startCharacterCardChat(id);
-          guard();
-          return {
-            result: { chatId: result.chat_id, messageId: result.message_id },
-            afterReply: () => {
-              if (current()) context.chatCreated?.(result.chat_id);
-            },
-          };
-        }
         if (operation === 'selectPrompt') await api.selectPrompt(id);
         else if (operation === 'createPrompt')
           createdId = (
@@ -284,6 +285,7 @@ export function createThemeProfileRequests(context: Context): Record<string, Ada
               name: String(params.name).trim(),
               description: params.description as string | undefined,
               content: String(params.content),
+              ...(params.select===undefined?{}:{select:params.select as boolean}),
             })
           ).prompt_id;
         else if (operation === 'updatePrompt')
@@ -337,6 +339,12 @@ export function createThemeProfileRequests(context: Context): Record<string, Ada
           guard();
           personas = items;
           return { result: { personas: items.map(publicPersona) } };
+        }
+        if (operation === 'getPersona') {
+          const items=await readPersonas(signal);guard();personas=items;
+          const persona=items.find(item=>item.id===params.id);
+          if(!persona)throw new Error('settings_entity_unavailable');
+          return {result:{persona:publicPersona(persona)}};
         }
         const id = Number(params.id);
         if (operation !== 'createPersona') {

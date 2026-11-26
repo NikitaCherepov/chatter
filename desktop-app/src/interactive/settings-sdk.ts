@@ -23,6 +23,9 @@ import type {
   SettingsSurveyAnswer,
   SettingsProfileImage,
   SettingsCroppedProfileImage,
+  SettingsChatCreation,
+  SettingsCreatedChat,
+  SettingsPromptInput,
 } from './settings-contract';
 export type { SettingsResult } from './settings-store';
 export type SettingsSectionId = keyof SettingsRequestContract | 'voice' | 'browser';
@@ -513,6 +516,8 @@ export function usePersonas() {
     busy: library.busy || action.busy,
     error: action.error ?? library.error,
     activate: (id: number) => run('activate', () => api.activatePersona({ id })),
+    read: (id:number) => api.getPersona({id}),
+    setImage: (id:number,image:SettingsProfileImage) => run('image',()=>api.setPersonaImage({id,...image})),
     remove: (id: number, confirmed: true) =>
       run('delete', () => api.deletePersona({ id, confirmed })),
   };
@@ -524,13 +529,13 @@ export function usePrompts() {
       'prompt',
       'library-actions',
     );
-  const run = async (
+  const run = async <T extends SettingsRequestResult<'prompt', 'listPrompts'>>(
     op: string,
-    task: () => Promise<SettingsRequestResult<'prompt', 'listPrompts'>>,
+    task: () => Promise<T>,
   ) => {
     const result = await action.run(op, task);
     if (result.ok) library.receive(result.value);
-    return result;
+    return result as SettingsResult<T>;
   };
   return {
     ...library,
@@ -540,9 +545,21 @@ export function usePrompts() {
     busy: library.busy || action.busy,
     error: action.error ?? library.error,
     select: (id: number) => run('select', () => api.selectPrompt({ id })),
+    create: (input:SettingsPromptInput&{select?:boolean}) => run('create',()=>api.createPrompt(input)),
+    read: (id:number) => api.getPrompt({id}),
+    setImage: (id:number,image:SettingsProfileImage) => run('image',()=>api.setPromptImage({id,...image})),
     remove: (id: number, confirmed: true) =>
       run('delete', () => api.deletePrompt({ id, confirmed })),
   };
+}
+
+/** Chat creation is independent of settings markup and never selects a global prompt. */
+export function useChatCreation() {
+  const api=useSettingsApi('prompt'),session=useSettingsSection('prompt');
+  const task=useSettingsTask<SettingsCreatedChat>('prompt','chat-creation');
+  return {...task,ready:session.ready&&!session.loading,
+    create:(options:SettingsChatCreation={})=>task.run('create',()=>api.createChat(options)),
+    startPrompt:(id:number,options:Omit<SettingsChatCreation,'promptId'>={})=>task.run('startPrompt',()=>api.startPromptChat({id,...options}))};
 }
 
 export function usePersonaInstructions(id: number) {
