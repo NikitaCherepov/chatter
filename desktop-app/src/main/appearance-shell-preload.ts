@@ -1,9 +1,35 @@
 /// <reference lib="dom" />
 import { contextBridge, ipcRenderer } from 'electron';
 import type { AppearanceShellState, AppearanceDocumentRequest, AppearanceBridgeRequest } from './appearance-shell-types';
+import type { ThemeStorageRequest, ThemeStorageSnapshot } from './theme-storage-types';
+
+const storageListeners = new Set<(snapshot: ThemeStorageSnapshot) => void>();
+let storageSequence = 0;
+const storageRequests = new Map<string, { resolve: (snapshot: ThemeStorageSnapshot) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+ipcRenderer.on('appearance-shell:storage-changed', (_event, snapshot: ThemeStorageSnapshot) => {
+  for (const listener of storageListeners) { try { listener(snapshot); } catch {} }
+});
+ipcRenderer.on('appearance-shell:storage-result', (_event, reply: { requestId: string; snapshot?: ThemeStorageSnapshot; error?: string }) => {
+  const pending = storageRequests.get(reply.requestId); if (!pending) return;
+  storageRequests.delete(reply.requestId); clearTimeout(pending.timer);
+  if (reply.error || !reply.snapshot) pending.reject(new Error(reply.error || 'theme_storage_read_failed'));
+  else {
+    for (const listener of storageListeners) { try { listener(reply.snapshot); } catch {} }
+    pending.resolve(reply.snapshot);
+  }
+});
+const requestThemeStorage = (request: ThemeStorageRequest): Promise<ThemeStorageSnapshot> => new Promise((resolve, reject) => {
+  if (storageRequests.size >= 16) { reject(new Error('theme_storage_busy')); return; }
+  const requestId = 'storage-' + ++storageSequence;
+  const timer = setTimeout(() => { storageRequests.delete(requestId); reject(new Error('theme_storage_timeout')); }, 15000);
+  storageRequests.set(requestId, { resolve, reject, timer });
+  ipcRenderer.send('appearance-shell:storage', { requestId, request });
+});
 
 // This preload exposes only the appearance navigator contract in its isolated renderer.
 let state: AppearanceShellState | undefined;
+let runtimeReady=false;
+const reportReady=()=>{if(runtimeReady)return;runtimeReady=true;ipcRenderer.send('appearance-shell:ready');};
 let runtimeVisible=false;
 const environmentListeners=new Set<(value:unknown)=>void>();
 const environment=()=>({visible:runtimeVisible,scopeId:state?.scopeId,preferences:state?.themeEffects,audio:state?.themeAudio});
@@ -180,6 +206,8 @@ contextBridge.exposeInMainWorld('chatter', {
   assetSource,
   getThemeEnvironment:environment,
   subscribeThemeEnvironment:(listener:(value:unknown)=>void)=>{environmentListeners.add(listener);listener(environment());return()=>{environmentListeners.delete(listener);};},
+  requestThemeStorage,
+  subscribeThemeStorage: (listener: (snapshot: ThemeStorageSnapshot) => void) => { storageListeners.add(listener); return () => { storageListeners.delete(listener); }; },
   setThemeEffectsPreferences:(patch:unknown)=>{if(!navigator.userActivation.isActive||!state?.themeEffects)return false;send({type:'themePreferences',patch});return true;},
   themeAudio:(action:string,options:Record<string,unknown>={})=>{
     if(!state?.themeEffects||!['sound','tone','musicPlay','musicPause','musicResume','musicStop','soundsStop'].includes(action))return false;
@@ -345,10 +373,17 @@ contextBridge.exposeInMainWorld('chatter', {
     send({ type: 'confirmationField', id, fieldId, value });
     return true;
   },
-  reportError: () => ipcRenderer.send('appearance-shell:failed'),
+  reportError: (message?:unknown,stack?:unknown) => ipcRenderer.send('appearance-shell:failed',{
+    message:typeof message==='string'?message.slice(0,500):undefined,
+    stack:typeof stack==='string'?stack.slice(0,4000):undefined,
+  }),
+  reportReady,
 });
-window.addEventListener('error', () => ipcRenderer.send('appearance-shell:failed'));
-window.addEventListener('unhandledrejection', () => ipcRenderer.send('appearance-shell:failed'));
+// A rejected task or event-handler exception does not mean the mounted UI has crashed.
+const reportUnhandled=(value:unknown)=>ipcRenderer.send(runtimeReady?'appearance-shell:diagnostic':'appearance-shell:failed',String(value).slice(0,500));
+window.addEventListener('error', event => reportUnhandled(event.message));
+window.addEventListener('unhandledrejection', event => reportUnhandled(event.reason));
+window.addEventListener('load',()=>{if(document.querySelector('meta[name="chatter-theme-language"]')?.getAttribute('content')==='html')reportReady();});
 // Observe the modal before theme listeners/browser default actions can close it. A dialog's
 // cancel event is distinct from keydown: consuming cancel need not prevent that keydown.
 window.addEventListener('keydown', event => {

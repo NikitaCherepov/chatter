@@ -7,6 +7,7 @@ import { CHAT_SDK_GUIDE } from './theme-chat-sdk-documentation';
 import { THEME_CHAT_EXAMPLES } from './theme-chat-sdk-examples';
 import {THEME_EFFECTS_GUIDE} from './theme-effects-documentation';
 import {THEME_DND_GUIDE} from './theme-dnd-documentation';
+import {THEME_STORAGE_GUIDE} from './theme-storage-documentation';
 
 export const THEME_README = `# Local Chatter themes
 
@@ -27,13 +28,14 @@ Keep generation and maintenance small by reusing code as you write it:
 
 - Use the existing SDK for supported behavior before writing loading, draft, save or error-handling logic yourself. For React settings start with docs/settings-sdk.md.
 - When the same structure serves the same purpose in two places, extract one theme-owned component and import it. Repeated fields, cards, dialogs and groups such as a form hint with Save/Discard buttons should share their markup; pass differences as props or children. Visual similarity alone does not require an abstraction.
-- Share repeated CSS through a base class, modifiers and variables instead of copying rules for each screen. A repeated group can start as a local component or shared class; a separate file for every small element is unnecessary.
+- MUST centralize colors and font families/sizes as CSS variables in global.css (import once). Use var(...) in components, inline styles and SVG; literals only in token definitions. Reuse CSS base classes/modifiers. See docs/styling.md.
 - Split larger themes by responsibility: keep the entry focused on composition and import panels, editors and shared components from separate files. Small themes may stay small. No fixed folder structure is required.
 - Reuse preserves the theme's own markup, style and animations. Do not simplify its design or replace cards with tables just to reduce code size. Bundled UI components remain optional.
 
 ## Guides
 
 - docs/theme-files.md: per-theme README.md, persistence and portable theme files.
+- docs/storage.md: useThemeStorage, persistent per-theme variables and HTML storage API.
 - docs/effects.md: Three/Fiber/Drei, Motion/GSAP, local assets, sound/music and lifecycle.
 - docs/drag-and-drop.md: dnd-kit, sortable lists, drag handles, keyboard input and app actions.
 - docs/chat-sdk.md: start here for React chat/library, composer, models/reasoning, messages, media and confirmations.
@@ -64,8 +66,32 @@ Local raster backgrounds use assets/image.png (PNG/JPEG/WebP/GIF, up to 8 MiB); 
 `;
 
 export const THEME_GUIDES: Record<string, string> = {
+  'styling.md': `# Shared theme styling
+
+MUST define palette and typography in global.css and reuse them in every component. Import it
+once from the React entry, or link it before component styles in HTML. Do not scatter fixed
+colors, font families or font sizes across component CSS, JSX styles or SVG attributes. This
+includes backgrounds, text, borders, focus/hover/disabled/error colors and code typography.
+Literal values belong in the shared variable definitions; aliases may reference other tokens.
+
+Example global.css:
+:root { --color-bg:#101722; --color-text:#e4ebf3; --color-panel:#182536;
+  --color-border:#445566; --font-ui:system-ui,sans-serif; --font-size-ui:15px; }
+
+Example component CSS:
+.panel { background:var(--color-panel); color:var(--color-text);
+  font-family:var(--font-ui); font-size:var(--font-size-ui);
+  border:1px solid var(--color-border); }
+
+In React use style={{color:'var(--color-text)'}}; SVG fills/strokes may use CSS variables or
+currentColor. For Canvas/WebGL resolve shared CSS tokens with getComputedStyle before passing
+colors to a library. Dynamic geometry/coordinates and user-provided media are not palette tokens.
+Scope reusable base classes, modifiers and variables by purpose rather than copying entire
+rules for each screen. Your own layout and component markup remain unrestricted.
+`,
   'drag-and-drop.md':THEME_DND_GUIDE,
   'effects.md':THEME_EFFECTS_GUIDE,
+  'storage.md':THEME_STORAGE_GUIDE,
   'chat-sdk.md': CHAT_SDK_GUIDE,
   'settings-sdk.md': `# Settings SDK: behavior without markup
 
@@ -903,6 +929,25 @@ ConfirmationContent/ConfirmationActions/Confirmations components as examples; th
 mandatory.
 `,
   'runtime.md': `# State, navigation and rendering
+
+## Refresh and recovery
+
+While a draft is edited, its replacement starts in a separate hidden renderer. The current
+working UI stays mounted until the replacement commits successfully. An invalid replacement
+keeps the previous UI and displays a preview error; fix the draft to try the next revision.
+The same unchanged revision does not clear a runtime error or become safe to apply merely
+because its files are readable. A successful replacement clears that error.
+
+An isolated renderer crash/hang gets one automatic restart within a 30-second recovery window,
+using current host state. Repeated failure returns control to the native interface. Theme-local
+React state may reset on restart; host-managed SDK state follows its normal ownership rules.
+A rejected background task or event-handler exception after mounting is logged without closing
+the entire UI. Catch expected errors and present them in your controls. Root render failures and
+startup failures remain fatal. A persistent native notice shows startup/update/crash errors,
+offers explicit copy of a bounded diagnostic report and manual retry. It stays available in
+the standard interface after a fatal failure; a successful restart clears it. Host console
+diagnostics include the failure category and error message. reportReady/reportError are internal runtime signals,
+not theme APIs; do not call them yourself.
 
 ## Choosing features
 

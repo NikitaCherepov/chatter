@@ -1,5 +1,6 @@
 import { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, Menu, Notification, protocol, screen, session, shell, Tray, type OpenDialogOptions } from 'electron';
 import { autoUpdater } from 'electron-updater';
+import { ThemeStorage } from './theme-storage';
 import {safeStorage} from 'electron';
 import {LocalMcpManager} from './local-mcp';
 import { readGithubMcpManifest } from './local-mcp-runtime';
@@ -137,7 +138,7 @@ protocol.registerSchemesAsPrivileged([
   { scheme: INTERACTIVE_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI:true, corsEnabled:true } },
   { scheme: 'chatter-theme', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
 ]);
-const interactivePreviews = new InteractivePreviews(undefined,(owner,url)=>themeStore(owner).readAsset(url));
+const interactivePreviews = new InteractivePreviews(undefined,(owner,url)=>themeStore(owner).readAsset(url), new ThemeStorage(path.join(app.getPath('userData'), 'theme-state')));
 const attachmentPicker = new AttachmentPicker();
 const attachmentPickerOwners = new Set<number>();
 ipcMain.handle('composer:pick-files', async (event, kind?: 'profile-image') => {

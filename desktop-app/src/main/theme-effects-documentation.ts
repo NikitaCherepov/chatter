@@ -19,6 +19,10 @@ Three/Drei features requiring network downloads, external fonts, workers or remo
 unavailable. Prefer procedural geometry, Stars/Float and local, uncompressed GLB files; for
 useGLTF disable Draco with its second argument false. Use local HDR textures instead of remote
 environment presets. Do not assume every upstream helper works inside this isolated runtime.
+Uncompressed GLB models may contain embedded PNG/JPEG textures: the loader's local blob/data
+URLs work directly; do not extract and reassign those textures. Relative texture paths also
+work when the referenced files are registered under assets/ beside the model. Remote texture
+URLs and Draco/KTX2 worker decoders still require unsupported external resources.
 
 ## Local assets
 
@@ -90,20 +94,22 @@ import {Canvas,useFrame} from '@react-three/fiber';
 import {Float,Stars} from '@react-three/drei';
 import {useThemeEffects} from '@chatter/ui';
 import type {Mesh} from 'three';
-function Orb({intensity}:{intensity:number}){
+function Orb({intensity,color}:{intensity:number;color:string}){
   const mesh=React.useRef<Mesh>(null);
   useFrame((_,delta)=>{if(mesh.current)mesh.current.rotation.y+=Math.min(delta,.05)*.14*intensity;});
   return <Float speed={.7*intensity} rotationIntensity={.15} floatIntensity={.3}>
-    <mesh ref={mesh}><torusKnotGeometry args={[1,.22,96,12]}/><meshStandardMaterial color="#73e2e8" roughness={.3} metalness={.8}/></mesh>
+    <mesh ref={mesh}><torusKnotGeometry args={[1,.22,96,12]}/><meshStandardMaterial color={color} roughness={.3} metalness={.8}/></mesh>
   </Float>;
 }
 export function AmbientScene(){const effects=useThemeEffects();
   if(!effects.active)return null;
+  const color=getComputedStyle(document.documentElement).getPropertyValue('--color-text').trim();
+  if(!color)return null; // Define the shared color in global.css.
   return <div aria-hidden="true" style={{position:'absolute',inset:0,pointerEvents:'none',opacity:.4}}>
     <Canvas dpr={[1,1.5]} camera={{position:[0,0,5]}}>
       <ambientLight intensity={.6}/><pointLight position={[3,4,5]} intensity={18}/>
       <Stars radius={45} depth={20} count={Math.round(600*effects.intensity)} fade speed={.3}/>
-      <Orb intensity={effects.intensity}/>
+      <Orb intensity={effects.intensity} color={color}/>
     </Canvas>
   </div>;
 }

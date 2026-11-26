@@ -3,6 +3,7 @@ import { THEME_README, THEME_GUIDES, THEME_SETTINGS_EXAMPLES, THEME_CHAT_SDK_EXA
 import {SETTINGS_SDK_TYPES,SETTINGS_STORE_TYPES,SETTINGS_SDK_UI_EXPORTS} from './theme-settings-sdk-declarations';
 import {CHAT_SDK_TYPES,CHAT_STORE_TYPES,CHAT_SDK_UI_EXPORTS} from './theme-chat-sdk-declarations';
 import {EFFECTS_SDK_TYPES,EFFECTS_CONTRACT_TYPES} from './theme-effects-sdk-declarations';
+import {STORAGE_SDK_TYPES,STORAGE_CONTRACT_TYPES} from './theme-storage-sdk-declarations';
 import {THEME_CHAT_STARTER} from './theme-chat-sdk-examples';
 import {THEME_EFFECTS_EXAMPLES} from './theme-effects-documentation';
 import {THEME_DND_EXAMPLES} from './theme-dnd-documentation';
@@ -432,6 +433,8 @@ export class LocalAppearanceStore {
       this.write(directory+'/chat-store.d.ts',CHAT_STORE_TYPES);
       this.write(directory+'/effects-sdk.d.ts',EFFECTS_SDK_TYPES);
       this.write(directory+'/theme-effects-types.d.ts',EFFECTS_CONTRACT_TYPES);
+      this.write(directory+'/theme-storage-sdk.d.ts',STORAGE_SDK_TYPES);
+      this.write(directory+'/theme-storage-types.d.ts',STORAGE_CONTRACT_TYPES);
       this.write(
         directory + '/tsconfig.json',
         JSON.stringify(
@@ -864,6 +867,8 @@ export class LocalAppearanceStore {
     this.write('chat-sdk.d.ts',CHAT_SDK_TYPES);
     this.write('chat-store.d.ts',CHAT_STORE_TYPES);
     this.write('effects-sdk.d.ts',EFFECTS_SDK_TYPES);
+    this.write('theme-storage-sdk.d.ts',STORAGE_SDK_TYPES);
+    this.write('theme-storage-types.d.ts',STORAGE_CONTRACT_TYPES);
     this.write('theme-effects-types.d.ts',EFFECTS_CONTRACT_TYPES);
   }
   private installLibraryTypes(){
@@ -930,6 +935,8 @@ export type ThemeState = {
 };
 export interface ThemeAPI {
   assetSource(path:string):string;
+  requestThemeStorage(request:import('./theme-storage-types').ThemeStorageRequest):Promise<import('./theme-storage-types').ThemeStorageSnapshot>;
+  subscribeThemeStorage(listener:(snapshot:import('./theme-storage-types').ThemeStorageSnapshot)=>void):()=>void;
   getThemeEnvironment():{visible:boolean;scopeId?:string;preferences?:import('./theme-effects-types').ThemeEffectsPreferences;audio?:import('./theme-effects-types').ThemeAudioState};
   subscribeThemeEnvironment(listener:(environment:ReturnType<ThemeAPI['getThemeEnvironment']>)=>void):()=>void;
   setThemeEffectsPreferences(patch:Partial<import('./theme-effects-types').ThemeEffectsPreferences>):boolean;
@@ -973,6 +980,9 @@ declare global {interface Window {chatter:ThemeAPI}}
 
 const appearanceUIDeclarations = `declare module '@chatter/ui' {
   export const useThemeEffects:typeof import('./effects-sdk').useThemeEffects;
+  export const useThemeStorage:typeof import('./theme-storage-sdk').useThemeStorage;
+  export type ThemeStorageMeta=import('./theme-storage-sdk').ThemeStorageMeta;
+  export type ThemeStorageValue=import('./theme-storage-types').ThemeStorageValue;
   export const useThemeAudio:typeof import('./effects-sdk').useThemeAudio;
   export const assetSource:typeof import('./effects-sdk').assetSource;
 ${SETTINGS_SDK_UI_EXPORTS}

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import type { InteractiveLanguage, InteractiveStatus } from '../../main/interactive-types';
+import type { InteractiveLanguage, InteractiveStatus,InteractiveFailure } from '../../main/interactive-types';
 import type { AppearanceProject } from '../lib/appearance-project';
 import { canReadAppearanceRequest, type AppearanceShellAction, type AppearanceShellState, type AppearanceBridgeRequest } from '../../main/appearance-shell-types';
 import s from './InteractivePreview.module.scss';
@@ -13,19 +13,21 @@ type AppearanceBridge = {
   state: AppearanceShellState;
   onAction: (action: AppearanceShellAction) => void;
   onClose: () => void;
-  onFailure: () => void;
+  onFailure: (failure:InteractiveFailure) => void;
   onReadDocument?: (request: AppearanceBridgeRequest) => Promise<unknown>;
   onRequestComplete?: (request: AppearanceBridgeRequest) => void;
   resolvePendingImage?: (id: string) => string | null;
   onVisibility?:(visible:boolean)=>void;
+  onReady?:()=>void;
 };
 
-export function InteractivePreview({ source, language, visible, appearance, project }: {
+export function InteractivePreview({ source, language, visible, appearance, project, themeId }: {
   source: string;
   language: InteractiveLanguage;
   visible: boolean;
   appearance?: AppearanceBridge;
   project?: AppearanceProject;
+  themeId?: string;
 }) {
   const { t } = useTranslation();
   const appearanceRef = useRef(appearance);
@@ -37,6 +39,8 @@ export function InteractivePreview({ source, language, visible, appearance, proj
   const expandButton = useRef<HTMLButtonElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const id = useRef<string | null>(null);
+  const recovery=useRef({at:0,count:0});
+  const hasBeenReady=useRef(false);
   const [seen, setSeen] = useState(false);
   const [run, setRun] = useState(0);
   const [stopped, setStopped] = useState(false);
@@ -55,13 +59,25 @@ export function InteractivePreview({ source, language, visible, appearance, proj
   }, []);
 
   useEffect(() => {
-    if (!available || !seen || stopped) return;
+    if (!available || (!seen&&!bridge) || stopped) return;
     let disposed = false;
     setPhase('loading');
     // Capabilities belong to this running preview. A parent refresh must not
     // discard them while the subscribed theme is still mounted.
     if (bridge) appearanceRef.current?.onAction({ type: 'confirmationPresentation', custom: false });
     const api = window.electronAPI;
+    const failed=(reason?:InteractiveStatus['reason'],detail?:string,stack?:string)=>{
+      const failure:InteractiveFailure={reason:reason??'load',detail,stack,phase:hasBeenReady.current?'runtime':'startup',recovering:false,at:Date.now()};
+      if(bridge){
+        console.warn('[appearance-shell] renderer failed',{id:id.current,reason:reason??'load',detail});
+        const now=Date.now();if(now-recovery.current.at>30000)recovery.current={at:now,count:0};
+        if(recovery.current.count<1&&(reason!=='render'||hasBeenReady.current)){
+          failure.recovering=true;appearanceRef.current?.onFailure(failure);
+          recovery.current.count++;recovery.current.at=now;setRun(value=>value+1);return;
+        }
+      }
+      setPhase('failed');appearanceRef.current?.onFailure(failure);
+    };
     const applyStatus = (status: InteractiveStatus) => {
       if(status.visible!==undefined)appearanceRef.current?.onVisibility?.(status.visible);
       setPhase(status.phase);
@@ -82,7 +98,8 @@ export function InteractivePreview({ source, language, visible, appearance, proj
         }));
         appearanceRef.current?.onClose();
       }
-      if (status.phase === 'failed') appearanceRef.current?.onFailure();
+      if(status.phase==='ready'){hasBeenReady.current=true;appearanceRef.current?.onReady?.();}
+      if (status.phase === 'failed') failed(status.reason,status.detail,status.stack);
     };
     const pendingStatuses = new Map<string, InteractiveStatus>();
     const unsubscribe = api.onInteractiveStatus(status => {
@@ -124,7 +141,7 @@ export function InteractivePreview({ source, language, visible, appearance, proj
         appearanceRef.current?.onRequestComplete?.(event.request);
       })();
     }) : () => {};
-    void api.interactiveCreate({ source, language, project, dark: document.documentElement.dataset.theme === 'dark', errorLabel, bridge })
+    void api.interactiveCreate({ source, language, project, dark: document.documentElement.dataset.theme === 'dark', errorLabel, bridge, themeId })
       .then(created => {
         if (disposed) { void api.interactiveStop(created); return; }
         id.current = created;
@@ -133,15 +150,15 @@ export function InteractivePreview({ source, language, visible, appearance, proj
         const pending = pendingStatuses.get(created);
         if (pending) applyStatus(pending);
         pendingStatuses.clear();
-      }).catch(() => {
-        if (!disposed) { setPhase('failed'); appearanceRef.current?.onFailure(); }
+      }).catch(error => {
+        if (!disposed) failed('load',String(error?.message??error).slice(0,500),typeof error?.stack==='string'?error.stack.slice(0,4000):undefined);
       });
     return () => {
       disposed = true; unsubscribe(); unsubscribeActions(); unsubscribeImages(); unsubscribeDocuments();
       appearanceRef.current?.onVisibility?.(false);
       if (id.current) { void api.interactiveStop(id.current).catch(() => {}); id.current = null; }
     };
-  }, [available, seen, stopped, source, project, language, errorLabel, run, bridge]);
+  }, [available, seen, stopped, source, project, language, errorLabel, run, bridge, themeId]);
 
   useEffect(() => {
     if (appearance && id.current)

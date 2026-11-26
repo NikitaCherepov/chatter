@@ -22,6 +22,11 @@ try {
 
   assert.ok(store.readDocumentation().length < 6000, 'the tool returns a concise index, not embedded sources and an API dump');
   assert.ok(!store.readDocumentation().includes('export default'));
+  assert.ok(store.readDocumentation().includes('MUST centralize colors and font families/sizes'));
+  assert.ok(fs.readFileSync(path.join(directory,'docs/styling.md'),'utf8').includes('Literal values belong in the shared variable definitions'));
+  const starter=path.join(directory,'templates/component');
+  assert.ok(fs.readFileSync(path.join(starter,'App.tsx'),'utf8').includes("import './global.css'"));
+  assert.ok(!/#[0-9a-f]{3,8}\b/i.test(fs.readFileSync(path.join(starter,'styles.css'),'utf8')));
   for (const name of ['runtime.md','messages.md','media.md','confirmations.md','appearance.json'])
     assert.ok(fs.existsSync(path.join(directory,'docs',name)));
   assert.ok(fs.readFileSync(path.join(directory,'docs/runtime.md'),'utf8').includes('useChatterState({navigation:true, confirmations:true})'));
@@ -58,6 +63,9 @@ try {
     [path.join(virtualRoot,'chat-store.d.ts'),fs.readFileSync(path.join(directory,'chat-store.d.ts'),'utf8')],
     [path.join(virtualRoot,'effects-sdk.d.ts'),fs.readFileSync(path.join(directory,'effects-sdk.d.ts'),'utf8')],
     [path.join(virtualRoot,'theme-effects-types.d.ts'),fs.readFileSync(path.join(directory,'theme-effects-types.d.ts'),'utf8')],
+    [path.join(virtualRoot,'theme-storage-sdk.d.ts'),fs.readFileSync(path.join(directory,'theme-storage-sdk.d.ts'),'utf8')],
+    [path.join(virtualRoot,'theme-storage-types.d.ts'),fs.readFileSync(path.join(directory,'theme-storage-types.d.ts'),'utf8')],
+    [path.join(virtualRoot,'Storage.tsx'),'import React from "react";import {useThemeStorage} from "@chatter/ui";export function Storage(){const [count,setCount,storage]=useThemeStorage("count",0);const load=()=>window.chatter.requestThemeStorage({operation:"read"});return <button disabled={!storage.ready} onClick={()=>{setCount(n=>n+1);void storage.flush();void load();}}>{count}</button>}'],
     [path.join(virtualRoot, 'components/Field.tsx'), fs.readFileSync(path.join(directory, 'examples/settings/Field.tsx'), 'utf8')],
     [path.join(virtualRoot, 'components/Section.tsx'), fs.readFileSync(path.join(directory, 'examples/settings/Section.tsx'), 'utf8')],
     [path.join(virtualRoot, 'App.tsx'), 'import React from "react";import {Markdown,MessageImages,Attachments,useChatterState} from "@chatter/ui";export default function App(){const state=useChatterState({navigation:true,confirmations:true});const message=state?.messages[0];const tokens=state?.context.tokens;const transcript=state?.voice.transcript;const model=state?.models.selectedId;return message?<><Markdown messageId={message.id} content={message.content}/><MessageImages message={message}/><Attachments message={message}/><button onClick={()=>window.chatter.selectModel(model??null)}>{message.info.modelName} {tokens}</button><button onClick={()=>window.chatter.startVoiceRecording()}>{transcript?.text}</button><button onClick={()=>window.chatter.stopVoiceRecording()}>Stop</button><button onClick={()=>window.chatter.cancelVoiceRecording()}>Cancel</button></>:null;}'],

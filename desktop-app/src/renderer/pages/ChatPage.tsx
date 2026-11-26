@@ -12,11 +12,11 @@ import { AppearanceShell, useCurrentAppearance, useAppearanceShellTheme } from '
 import { canRunAppearanceAction, canReadAppearanceDocument, type AppearanceBridgeRequest, type AppearanceShellAction, type AppearanceShellState } from '../../main/appearance-shell-types';
 import { appearanceMessageActions, canEditChatMessage } from '../lib/appearance-message-actions';
 import { parseAppearanceProfile, type AppearanceProfile } from '../lib/appearance-schema';
-import { APPEARANCE_APPLIED_EVENT } from '../lib/appearance-runtime';
+import { APPEARANCE_APPLIED_EVENT, getAppearancePreview, subscribeAppearancePreview } from '../lib/appearance-runtime';
 import { useMessageArrival } from '../lib/use-message-arrival';
 import { RUNBOOK_COMMAND_TOOLS_ENABLED } from '../lib/runbook-ui';
 import { Icon } from '../components/Icon';
-import React, { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo, useSyncExternalStore } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChatMessageCache } from '../lib/chat-message-cache';
 import { useChatPromptKey, useChatPromptSettings } from '../lib/chat-prompt-queries';
@@ -1081,6 +1081,7 @@ export function ChatPage() {
   const locale = i18n.resolvedLanguage || i18n.language;
   const { user, setUser, logout } = useAuth();
   const appearanceProfile = useCurrentAppearance();
+  const appearancePreview = useSyncExternalStore(subscribeAppearancePreview, getAppearancePreview);
   const appearanceTheme = useAppearanceShellTheme();
   const appearanceShell = appearanceProfile?.shell;
   const [shellOpen, setShellOpen] = useState(Boolean(appearanceShell));
@@ -1092,7 +1093,13 @@ export function ChatPage() {
   const shellMessageActionsPending = useRef(new Set<string>());
   const [appearanceEditorDraft, setAppearanceEditorDraft] = useState<AppearanceProfile>();
   useEffect(() => {
-    const done = () => setAppearanceEditorDraft(undefined);
+    const done = (event: Event) => {
+      setAppearanceEditorDraft(undefined);
+      const { id, revision } = (event as CustomEvent).detail;
+      // A previewed proposal is temporarily absent from the queue, so its card
+      // cannot receive the applied event. Resolve it here while it is suspended.
+      setAppearanceProposals(items => items.filter(item => item.profile.id !== id || item.profile.revision !== revision));
+    };
     window.addEventListener(APPEARANCE_APPLIED_EVENT, done);
     return () => window.removeEventListener(APPEARANCE_APPLIED_EVENT, done);
   }, []);
@@ -1656,6 +1663,13 @@ export function ChatPage() {
   const [chatFindIndex, setChatFindIndex] = useState(-1);
   const [chatFindLoading, setChatFindLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  useEffect(() => {
+    if (!appearancePreview) return;
+    setShowSettings(false);
+    setLibraryOpen(false);
+    setShellView('home');
+    setShellOpen(Boolean(appearancePreview.shell));
+  }, [appearancePreview?.id, Boolean(appearancePreview)]);
   const [settingsTarget, setSettingsTarget] = useState<ReturnType<typeof nativeSettingsTarget>>(null);
   useEffect(() => { if (!showSettings) setSettingsTarget(null); }, [showSettings]);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -5544,7 +5558,10 @@ export function ChatPage() {
         onPreview={() => setLayoutPreview({ profile: proposal.profile, proposalId: proposal.proposal_id })}
         onResolved={() => resolveLayoutProposal(proposal.proposal_id)} />
     )),
-    ...appearanceProposals.map(proposal=><AppearanceConfirmation key={proposal.proposal_id} proposal={proposal} onResolved={()=>setAppearanceProposals(items=>items.filter(item=>item.proposal_id!==proposal.proposal_id))}/>),
+    // Keep the proposal for cancel/restore, but remove both its native dialog
+    // and projected theme card while the user is trying the proposed interface.
+    ...appearanceProposals.filter(proposal => proposal.profile.id !== appearancePreview?.id)
+      .map(proposal=><AppearanceConfirmation key={proposal.proposal_id} proposal={proposal} onResolved={()=>setAppearanceProposals(items=>items.filter(item=>item.proposal_id!==proposal.proposal_id))}/>),
     ...pendingRunbooks.map(rb => (
       <ConfirmationCard
         key={rb.id}
@@ -8850,12 +8867,13 @@ export function ChatPage() {
     >
       {appearanceShell && (
         <AppearanceShell key={`${api.API_BASE}:${user?.id}`} shell={appearanceShell} state={shellState}
+          theme={appearanceProfile?{id:appearanceProfile.id,name:appearanceProfile.name,revision:appearanceProfile.revision}:undefined}
+          onRetry={()=>setShellOpen(true)}
           visible={shellVisible} onAction={handleShellAction} onClose={() => setShellOpen(false)}
           onReadDocument={readShellDocument} resolvePendingImage={resolvePendingImage} onVisibility={themeEffectsBridge.setVisible}
           onRequestComplete={request => { if (request.method === 'settings') themeSettings.completeRequest(request.requestId); }}
-          onFailure={() => {
-            setShellOpen(false);
-            toast.error(t('appearance.shellFailed'));
+          onFailure={retained => {
+            if(!retained)setShellOpen(false);
           }} />
       )}
       {tabsEnabled && <div className={s.chatLibraryBackdrop} data-open={libraryOpen} onPointerDown={closeChatLibrary} />}

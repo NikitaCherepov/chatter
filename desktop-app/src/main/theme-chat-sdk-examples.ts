@@ -190,6 +190,7 @@ import Conversation from './components/Conversation';
 import Composer from './components/Composer';
 import Models from './components/Models';
 import Confirmations from './components/Confirmations';
+import './global.css';
 import './styles.css';
 export default function App(){
   const chat=useConversation({navigation:true}),library=useChatLibrary();
@@ -211,6 +212,7 @@ export default function App(){
       'Confirmations.tsx',
     ].map((name) => ['components/' + name, THEME_CHAT_EXAMPLES[name]]),
   ),
+  'global.css':':root{--color-bg:#101722;--color-text:#e4ebf3;--color-panel:#182536;--color-border:#445566;--font-ui:system-ui,sans-serif;--font-code:ui-monospace,monospace;--font-size-ui:15px;--font-size-code:14px;--line-height:1.6}',
   'styles.css':
-    'body{margin:0;font:15px/1.6 system-ui,sans-serif;background:#101722;color:#e4ebf3}main,aside,body>header{max-width:900px;margin:auto;padding:24px}header,form,nav{display:flex;gap:12px;align-items:center;flex-wrap:wrap}button,input,textarea,select{padding:12px;border-radius:8px;border:1px solid #456;background:#182536;color:inherit}article{padding:16px;margin:16px 0;background:#182536;border-radius:8px}textarea{flex:1;min-width:180px}img{max-width:100%}pre{white-space:pre-wrap;overflow-wrap:anywhere}',
+    'body{margin:0;font:var(--font-size-ui)/var(--line-height) var(--font-ui);background:var(--color-bg);color:var(--color-text)}main,aside,body>header{max-width:900px;margin:auto;padding:24px}header,form,nav{display:flex;gap:12px;align-items:center;flex-wrap:wrap}button,input,textarea,select{padding:12px;border-radius:8px;border:1px solid var(--color-border);background:var(--color-panel);color:inherit}article{padding:16px;margin:16px 0;background:var(--color-panel);border-radius:8px}textarea{flex:1;min-width:180px}img{max-width:100%}code,pre{font-family:var(--font-code);font-size:var(--font-size-code)}pre{white-space:pre-wrap;overflow-wrap:anywhere}',
 };

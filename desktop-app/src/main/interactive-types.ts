@@ -8,6 +8,14 @@ export type InteractiveStatus = {
   reset?: boolean;
   confirmations?: boolean;
   visible?: boolean;
+  reason?: 'render'|'unresponsive'|'renderer-gone'|'watchdog'|'startup-timeout'|'load';
+  detail?:string;
+  stack?:string;
+};
+export type InteractiveFailure={
+  reason:NonNullable<InteractiveStatus['reason']>;
+  detail?:string;stack?:string;
+  phase:'startup'|'runtime';recovering:boolean;at:number;
 };
 export type InteractiveInput = {
   language: InteractiveLanguage;
@@ -15,6 +23,7 @@ export type InteractiveInput = {
   dark: boolean;
   errorLabel: string;
   bridge?: 'appearance-chat-list-v1';
+  themeId?: string;
   project?: AppearanceProject;
 };
 export type InteractivePlacement = {

@@ -8,11 +8,15 @@ import { parseAppearanceShellAction, canRunAppearanceAction, parseAppearanceBrid
   type AppearanceShellState, type AppearanceImageRequest, type AppearanceBridgeRequest } from './appearance-shell-types';
 import { canRequestSettings } from './settings-request-types';
 import {isAppearanceAssetPath} from './appearance-project';
+import type { ThemeStorage } from './theme-storage';
 
 type Entry = {
   id: string; host: BrowserWindow; owner: WebContents; clip: View; view: WebContentsView;
   visible: boolean; timer?: ReturnType<typeof setInterval>; deadline?: ReturnType<typeof setTimeout>;
   runtimeVisible?:boolean;
+  ready?:boolean;
+  failureDetail?:string;
+  failureStack?:string;
   isolated: Session;
   expanded?: boolean;
   appearance?: { state?: AppearanceShellState; window: number; count: number; handlesNavigation?: boolean; handlesConfirmations?: boolean };
@@ -26,7 +30,7 @@ type Entry = {
 export class InteractivePreviews {
   private entries = new Map<string, Entry>();
   private runtime: string | null = null;
-  constructor(private runtimeFile = path.join(__dirname, '../interactive/runtime.js'),private readAsset?:(owner:WebContents,url:string)=>{data:Uint8Array;mimeType:string}) {}
+  constructor(private runtimeFile = path.join(__dirname, '../interactive/runtime.js'),private readAsset?:(owner:WebContents,url:string)=>{data:Uint8Array;mimeType:string}, private storage?: ThemeStorage) {}
 
   create(owner: WebContents, raw: unknown): string {
     const input = validateInteractiveInput(raw);
@@ -101,6 +105,13 @@ export class InteractivePreviews {
     this.entries.set(id, entry);
     owner.once('destroyed', gone);
     const contents = view.webContents;
+    if (input.themeId && this.storage) {
+      const unsubscribe = this.storage.subscribe(input.themeId, (snapshot, origin) => {
+        if (origin !== id && !contents.isDestroyed()) contents.send('appearance-shell:storage-changed', snapshot);
+      });
+      const cleanup = entry.cleanup;
+      entry.cleanup = () => { cleanup(); unsubscribe(); };
+    }
     if(input.bridge)contents.setAudioMuted(true);
     const visibility=()=>this.notifyVisibility(entry);
     host.on('show',visibility);host.on('hide',visibility);host.on('minimize',visibility);host.on('restore',visibility);
@@ -113,7 +124,36 @@ export class InteractivePreviews {
     contents.on('will-attach-webview', event => event.preventDefault());
     contents.on('ipc-message', (event, channel, value) => {
       if (!entry.appearance || event.senderFrame !== contents.mainFrame || !this.entries.has(id)) return;
-      if (channel === 'appearance-shell:failed') { this.remove(id, 'failed'); return; }
+      if (channel === 'appearance-shell:storage') {
+        if (typeof value?.requestId !== 'string' || value.requestId.length > 100) return;
+        const reply = { requestId: value.requestId };
+        try {
+          if (!input.themeId || !this.storage) throw new Error('theme_storage_unavailable');
+          // A staged, hidden replacement can hydrate, but cannot modify live state.
+          if (value.request?.operation !== 'read' && !entry.visible) throw new Error('theme_storage_readonly');
+          const rate = entry.appearance;
+          if (Date.now() - rate.window >= 1000) { rate.window = Date.now(); rate.count = 0; }
+          if (++rate.count > 100) throw new Error('theme_storage_busy');
+          contents.send('appearance-shell:storage-result', { ...reply, snapshot: this.storage.request(input.themeId, value.request, id) });
+        } catch (error: any) {
+          const code = /^theme_storage_[a-z_]+$/.test(error?.message) ? error.message : 'theme_storage_write_failed';
+          contents.send('appearance-shell:storage-result', { ...reply, error: code });
+        }
+        return;
+      }
+      if (channel === 'appearance-shell:failed') {
+        entry.failureDetail=typeof value==='string'?value.slice(0,500):typeof value?.message==='string'?value.message.slice(0,500):undefined;
+        entry.failureStack=typeof value?.stack==='string'?value.stack.slice(0,4000):undefined;
+        this.remove(id, 'failed', false, 'render');return;
+      }
+      if (channel === 'appearance-shell:ready') {
+        if (!entry.ready) { entry.ready=true; clearTimeout(entry.deadline);entry.deadline=undefined;this.emit(entry,'ready'); }
+        return;
+      }
+      if(channel==='appearance-shell:diagnostic') {
+        console.warn('[appearance-shell] nonfatal error',{id,message:typeof value==='string'?value.slice(0,500):'Unhandled theme error'});
+        return;
+      }
       if (channel === 'appearance-shell:escape') { this.emit(entry, 'ready', { escape: true }); return; }
       if (channel === 'appearance-shell:paste') {
         const action = parseAppearancePaste(value);
@@ -184,11 +224,14 @@ export class InteractivePreviews {
         this.emit(entry, 'ready', { escape: true });
       }
     });
-    contents.on('unresponsive', () => this.remove(id, 'failed', true));
-    contents.on('render-process-gone', () => this.remove(id, 'failed'));
+    contents.on('unresponsive', () => this.remove(id, 'failed', true,'unresponsive'));
+    contents.on('render-process-gone', (_event,details) => {
+      entry.failureDetail=`${details.reason} (exitCode: ${details.exitCode})`;
+      this.remove(id, 'failed',false,'renderer-gone');
+    });
     contents.on('did-finish-load', () => {
       if (!this.entries.has(id)) return;
-      clearTimeout(entry.deadline);
+      if(!entry.appearance||entry.ready)clearTimeout(entry.deadline);
       if (entry.appearance?.state) contents.send('appearance-shell:state', entry.appearance.state);
       this.notifyVisibility(entry,true);
       this.emit(entry, 'ready');
@@ -196,15 +239,15 @@ export class InteractivePreviews {
       // Main-process watchdog remains usable even if generated code blocks its renderer.
       entry.timer = setInterval(() => {
         if (entry.deadline || contents.isDestroyed()) return;
-        entry.deadline = setTimeout(() => this.remove(id, 'failed', true), 3000);
+        entry.deadline = setTimeout(() => this.remove(id, 'failed', true,'watchdog'), 3000);
         void contents.executeJavaScript('void 0').then(() => {
           clearTimeout(entry.deadline); entry.deadline = undefined;
-        }).catch(() => this.remove(id, 'failed'));
+        }).catch(() => this.remove(id, 'failed',false,'renderer-gone'));
       }, 3000);
-      entry.deadline = undefined;
+      if(!entry.appearance||entry.ready)entry.deadline = undefined;
     });
-    entry.deadline = setTimeout(() => this.remove(id, 'failed', true), 12000);
-    void contents.loadURL(url).catch(() => this.remove(id, 'failed'));
+    entry.deadline = setTimeout(() => this.remove(id, 'failed', true,'startup-timeout'), 12000);
+    void contents.loadURL(url).catch(error => {entry.failureDetail=String(error?.message??error).slice(0,500);this.remove(id, 'failed',false,'load');});
     return id;
   }
 
@@ -343,13 +386,15 @@ export class InteractivePreviews {
 
   destroy(): void { for (const id of [...this.entries.keys()]) this.remove(id); }
 
-  private emit(entry: Entry, phase: InteractiveStatus['phase'], detail: Pick<InteractiveStatus, 'escape' | 'reset' | 'confirmations' | 'visible'> = {}): void {
+  private emit(entry: Entry, phase: InteractiveStatus['phase'], detail: Pick<InteractiveStatus, 'escape' | 'reset' | 'confirmations' | 'visible'|'reason'|'detail'|'stack'> = {}): void {
     if (!entry.owner.isDestroyed()) entry.owner.send('interactive-preview:status', {
-      id: entry.id, phase, ...(entry.appearance ? { confirmations: Boolean(entry.appearance.handlesConfirmations) } : {}), ...detail,
+      id: entry.id, phase:phase==='ready'&&entry.appearance&&!entry.ready?'loading':phase,
+      // A load-time visibility event may not reach the owner. Ready must carry a complete snapshot.
+      ...(entry.appearance ? { confirmations: Boolean(entry.appearance.handlesConfirmations),visible:phase==='failed'||phase==='stopped'?false:Boolean(entry.runtimeVisible) } : {}), ...detail,
     } satisfies InteractiveStatus);
   }
 
-  private remove(id: string, phase?: InteractiveStatus['phase'], crash = false): void {
+  private remove(id: string, phase?: InteractiveStatus['phase'], crash = false,reason?:InteractiveStatus['reason']): void {
     const entry = this.entries.get(id);
     if (!entry) return;
     this.entries.delete(id);
@@ -357,7 +402,7 @@ export class InteractivePreviews {
     for (const pending of entry.documentRequests.values()) clearTimeout(pending.timer);
     clearInterval(entry.timer); clearTimeout(entry.deadline);
     entry.cleanup();
-    if (phase) this.emit(entry, phase);
+    if (phase) this.emit(entry, phase,{reason,detail:entry.failureDetail,stack:entry.failureStack});
     if (!entry.host.isDestroyed()) entry.host.contentView.removeChildView(entry.clip);
     const contents = entry.view.webContents;
     const isolated = entry.isolated;

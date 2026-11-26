@@ -20,12 +20,18 @@ class PreviewErrorBoundary extends React.Component<React.PropsWithChildren, { fa
   static getDerivedStateFromError() {
     return { failed: true };
   }
-  componentDidCatch() {
-    (window as any).chatter?.reportError();
+  componentDidCatch(error:unknown,info:React.ErrorInfo) {
+    (window as any).chatter?.reportError(error instanceof Error?error.message:typeof error==='string'?error:'Theme render failed',
+      [error instanceof Error?error.stack:'',info.componentStack].filter(Boolean).join('\n'));
   }
   render() {
     return this.state.failed ? <p role="alert">{payload.errorLabel}</p> : this.props.children;
   }
+}
+function Ready({children}:React.PropsWithChildren){
+  const state=ChatterUI.useChatterState();
+  React.useEffect(()=>{if(!state)return;const timer=setTimeout(()=>(window as any).chatter?.reportReady(),0);return()=>clearTimeout(timer);},[Boolean(state)]);
+  return <>{children}</>;
 }
 async function start() {
   const bundledRequire = (name: string) => {
@@ -100,11 +106,11 @@ async function start() {
     throw new Error('Export a default React component');
   root.render(
     <PreviewErrorBoundary>
-      <Component />
+      {(window as any).chatter?<Ready><Component /></Ready>:<Component />}
     </PreviewErrorBoundary>,
   );
 }
-void start().catch(() => {
-  (window as any).chatter?.reportError();
+void start().catch(error => {
+  (window as any).chatter?.reportError(String(error?.message??error),typeof error?.stack==='string'?error.stack:undefined);
   root.render(<p role="alert">{payload.errorLabel}</p>);
 });

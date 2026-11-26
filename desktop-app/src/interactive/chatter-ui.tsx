@@ -11,6 +11,8 @@ export {useSettingsSection,useSettingsApi,useSettingsTask,useSettingsResource,us
 export {useComposer,useVoice,useSpeech,useModels,useConversation,useMessage,useMessageEditor,useImage,useImageViewer,useDocument,useDocumentPage,useDocumentViewer,useConfirmations,useConfirmation,useChatLibrary,useChatMenu,useFolderMenu,useChatEditor,useFolderEditor} from './chat-sdk';
 export type {ChatMessage,ChatMessageAction,ChatReasoningLevel,ChatDocument,ChatDocumentPage,ChatResult,MessageActionInput} from './chat-sdk';
 export {useThemeEffects,useThemeAudio,assetSource} from './effects-sdk';
+export {useThemeStorage} from './theme-storage-sdk';
+export type {ThemeStorageValue,ThemeStorageMeta} from './theme-storage-sdk';
 
 const style = document.createElement('style');
 style.textContent = markdownStyles + componentStyles;

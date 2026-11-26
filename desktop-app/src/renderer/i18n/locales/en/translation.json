@@ -125,6 +125,28 @@
     "shellNative": "Standard interface",
     "shellLoadMore": "Load more",
     "shellFailed": "The custom navigator stopped. The standard interface is available.",
+    "shellUpdateFailed": "The theme update could not start. The previous working interface is still running.",
+    "failure": {
+      "recovering": "Restarting the theme…",
+      "updateTitle": "The theme update could not start",
+      "startupTitle": "The theme could not start",
+      "runtimeTitle": "The theme stopped working",
+      "retained": "The previous working interface is still available. You can fix the theme and try again.",
+      "native": "The standard interface is available. You can copy the error and retry the theme.",
+      "details": "Technical details",
+      "copy": "Copy error",
+      "copied": "Copied",
+      "copyFailed": "Could not copy. Select the text above and copy it manually.",
+      "retry": "Retry theme",
+      "reason": {
+        "render": "An error occurred in the theme code.",
+        "unresponsive": "The theme renderer stopped responding.",
+        "renderer-gone": "The theme process exited.",
+        "watchdog": "The theme renderer did not respond within 3 seconds.",
+        "startup-timeout": "The theme did not finish starting within 12 seconds.",
+        "load": "The theme renderer could not be loaded."
+      }
+    },
     "shellHelp": "Create the chat screen with your own HTML, CSS and JavaScript, or React TSX. It receives chat data through window.chatter. Navigator scope opens the native conversation. Workspace scope also receives messages and supports a custom composer. Preview before applying.",
     "shellEnable": "Use a custom navigator",
     "shellLanguage": "Source format",

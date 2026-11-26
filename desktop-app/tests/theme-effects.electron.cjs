@@ -2,7 +2,7 @@ const assert = require('node:assert/strict'),
   fs = require('node:fs'),
   os = require('node:os'),
   path = require('node:path');
-const { app, BrowserWindow, protocol } = require('electron');
+const { app, BrowserWindow, protocol, nativeImage } = require('electron');
 const { InteractivePreviews } = require('../dist/main/interactive-preview.js');
 const { INTERACTIVE_SCHEME } = require('../dist/main/interactive-document.js');
 const { THEME_DND_EXAMPLES } = require('../dist/main/theme-dnd-documentation.js');
@@ -17,6 +17,60 @@ app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'chatter-effects-ui-'));
 app.setPath('userData', temp);
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// Minimal textured triangle: exercise GLTFLoader's actual embedded-image paths.
+const png = nativeImage
+  .createFromBitmap(Buffer.from([0x22, 0xbb, 0x44, 0xff]), { width: 1, height: 1 })
+  .toPNG();
+function texturedGlb(image) {
+  const geometry = Buffer.alloc(60);
+  [-1, -1, 0, 1, -1, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 1].forEach((value, index) =>
+    geometry.writeFloatLE(value, index * 4),
+  );
+  const embedded = image === 'embedded';
+  const binary = Buffer.concat([geometry, ...(embedded ? [png] : [])]);
+  const gltf = {
+    asset: { version: '2.0' },
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    nodes: [{ mesh: 0 }],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0, TEXCOORD_0: 1 }, material: 0 }] }],
+    materials: [{ pbrMetallicRoughness: { baseColorTexture: { index: 0 }, metallicFactor: 0 } }],
+    textures: [{ source: 0 }],
+    images: [embedded ? { bufferView: 2, mimeType: 'image/png' } : { uri: image }],
+    buffers: [{ byteLength: binary.length }],
+    bufferViews: [
+      { buffer: 0, byteOffset: 0, byteLength: 36 },
+      { buffer: 0, byteOffset: 36, byteLength: 24 },
+      ...(embedded ? [{ buffer: 0, byteOffset: 60, byteLength: png.length }] : []),
+    ],
+    accessors: [
+      {
+        bufferView: 0,
+        componentType: 5126,
+        count: 3,
+        type: 'VEC3',
+        min: [-1, -1, 0],
+        max: [1, 1, 0],
+      },
+      { bufferView: 1, componentType: 5126, count: 3, type: 'VEC2' },
+    ],
+  };
+  const json = Buffer.from(JSON.stringify(gltf)),
+    jsonLength = Math.ceil(json.length / 4) * 4,
+    binaryLength = Math.ceil(binary.length / 4) * 4;
+  const glb = Buffer.alloc(12 + 8 + jsonLength + 8 + binaryLength);
+  glb.write('glTF');
+  glb.writeUInt32LE(2, 4);
+  glb.writeUInt32LE(glb.length, 8);
+  glb.writeUInt32LE(jsonLength, 12);
+  glb.writeUInt32LE(0x4e4f534a, 16);
+  glb.fill(0x20, 20, 20 + jsonLength);
+  json.copy(glb, 20);
+  glb.writeUInt32LE(binaryLength, 20 + jsonLength);
+  glb.writeUInt32LE(0x004e4942, 24 + jsonLength);
+  binary.copy(glb, 28 + jsonLength);
+  return glb;
+}
 async function until(check) {
   const start = Date.now();
   while (!(await check())) {
@@ -50,7 +104,29 @@ app
       original(channel, payload);
     };
     let reads = 0;
+    const models = {
+      'assets/embedded.glb': texturedGlb('embedded'),
+      'assets/data.glb': texturedGlb('data:image/png;base64,' + png.toString('base64')),
+      'assets/relative.glb': texturedGlb('texture.png'),
+      'assets/texture.png': png,
+    };
+    const modelAssets = Object.fromEntries(
+      Object.keys(models).map((name, index) => [
+        name,
+        'chatter-theme://' +
+          'a'.repeat(24) +
+          '/' +
+          String(index + 1).repeat(64) +
+          path.extname(name),
+      ]),
+    );
     manager = new InteractivePreviews(undefined, (_owner, url) => {
+      const model = Object.keys(modelAssets).find((name) => modelAssets[name] === url);
+      if (model)
+        return {
+          data: models[model],
+          mimeType: model.endsWith('.png') ? 'image/png' : 'model/gltf-binary',
+        };
       assert.equal(url, 'chatter-theme://' + 'a'.repeat(24) + '/' + 'b'.repeat(64) + '.wav');
       reads++;
       return { data: Buffer.from('fixture-local-asset'), mimeType: 'audio/wav' };
@@ -58,6 +134,7 @@ app
     const project = {
       entry: 'App.tsx',
       assets: {
+        ...modelAssets,
         'assets/click.wav': 'chatter-theme://' + 'a'.repeat(24) + '/' + 'b'.repeat(64) + '.wav',
       },
       files: {
@@ -67,7 +144,7 @@ app
         'App.tsx': `
 import React from 'react';
 import {Canvas,useFrame} from '@react-three/fiber';
-import {Float} from '@react-three/drei';
+import {Float,useGLTF} from '@react-three/drei';
 import {Vector3} from 'three';
 import {motion} from 'framer-motion';
 import {gsap} from 'gsap';
@@ -75,6 +152,9 @@ import {useThemeEffects,useThemeAudio,assetSource} from '@chatter/ui';
 import {SortableList} from './SortableList';
 import './dnd.css';
 function Mesh(){useFrame(()=>{window.meshFrames=(window.meshFrames||0)+1;});return <Float><mesh><boxGeometry/><meshBasicMaterial color="#00eebb"/></mesh></Float>}
+function Model({name}){const model=useGLTF(assetSource('assets/'+name+'.glb'),false,false);
+  React.useEffect(()=>{const mesh=model.scene.children[0],image=mesh.material.map?.image;window.texturedModels={...window.texturedModels,[name]:{width:image?.width,height:image?.height}};},[model]);
+  return <primitive object={model.scene}/>;}
 export default function App(){const effects=useThemeEffects(),audio=useThemeAudio();
   const [items,setItems]=React.useState([{id:'alpha',label:'Alpha'},{id:'beta',label:'Beta'},{id:'gamma',label:'Gamma'}]);
   React.useEffect(()=>{window.libraryCheck={vector:new Vector3(1,2,3).length(),gsap:gsap.version};
@@ -88,6 +168,7 @@ export default function App(){const effects=useThemeEffects(),audio=useThemeAudi
     <button id="sound" onClick={()=>{audio.setPreferences({soundEnabled:true});audio.tone(440,80,.2)}}>Sound</button>
     <button id="music" onClick={()=>{audio.setPreferences({musicEnabled:true});audio.music.play('assets/click.wav')}}>Music</button>
     <div style={{width:300,height:200}}><Canvas onCreated={({gl})=>window.glReady=!!gl.getContext()}><Mesh/></Canvas></div>
+    <div style={{width:80,height:80}}><Canvas><React.Suspense fallback={null}>{['embedded','data','relative'].map(name=><Model key={name} name={name}/>)}</React.Suspense></Canvas></div>
     <section id="dnd-test"><SortableList items={items} onReorder={setItems} handleLabel={item=>'Move '+item.label}/><output id="order">{items.map(item=>item.id).join(',')}</output></section>
   </motion.main>;
 }`,
@@ -138,6 +219,15 @@ export default function App(){const effects=useThemeEffects(),audio=useThemeAudi
         js('window.assetText==="fixture-local-asset" && window.glReady && window.meshFrames>1'),
       );
       assert.equal(reads, 1);
+      await until(() => js('Object.keys(window.texturedModels||{}).length===3'));
+      assert.deepEqual(await js('window.texturedModels'), {
+        embedded: { width: 1, height: 1 },
+        data: { width: 1, height: 1 },
+        relative: { width: 1, height: 1 },
+      });
+      console.log(
+        'PASS: GLB embedded blob, inline data URI and relative local texture load through real Drei/GLTFLoader without extraction',
+      );
       assert.equal(await js('window.musicAutoplay'), false);
       assert.ok((await js('window.libraryCheck.vector')) > 3);
       assert.equal(await js('window.libraryCheck.gsap'), '3.15.1');
